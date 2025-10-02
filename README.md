@@ -1,66 +1,67 @@
 # Translator Bidir (Azure Speech)
 
-Sistema di traduzione bidirezionale in tempo reale basato su Azure Speech Services.
+Real-time, bidirectional speech translation using Azure Speech Services.
 
-- Tu parli al microfono locale (es. Italiano) e il sistema sintetizza in inglese verso il tuo microfono virtuale (CABLE-A), che può essere selezionato in Teams/Meet/Zoom.
-- La voce remota (es. in inglese) viene catturata dall'uscita virtuale (CABLE-B), tradotta in italiano e riprodotta nelle tue cuffie.
+- You speak into your local microphone (e.g., Italian). The system translates and synthesizes English to a virtual microphone (CABLE-A) that you select in Teams/Meet/Zoom.
+- Remote speech (e.g., English) is captured from a virtual speaker (CABLE-B), translated into your language, and played on your headphones.
 
-
-## Requisiti
+## Requirements
 
 - Python 3.9+
-- Azure Speech Service key e region
-- Driver audio installati (consigliato VB-CABLE per routing audio virtuale):
-  - CABLE-A: usato come microfono verso la call (la TTS in uscita va qui)
-  - CABLE-B: usato come altoparlante della call (catturiamo da qui l'audio remoti)
+- Azure Speech Service key and region
+- Audio routing tools installed (VB-CABLE recommended):
+  - CABLE-A: used as the microphone sent to the meeting (upstream TTS goes here)
+  - CABLE-B: used as the meeting speaker (we capture from here)
 
-## Installazione
+## Installation
 
-1) Crea ed attiva un virtualenv:
+1) Create and activate a virtual environment:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-2) Installa le dipendenze:
+2) Install dependencies:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-3) Configura le variabili d'ambiente: copia `.env.example` in `.env` e compila i valori.
+3) Configure environment variables: copy `.env.example` to `.env` and fill values.
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-## Esecuzione
+## Run
 
 ```powershell
 python main.py
 ```
 
-Impostazioni consigliate nella tua app di videoconferenza:
+Recommended settings in your meeting app:
 
-- Microfono: CABLE-A (o equivalente – quello dove inviamo la TTS di uscita)
-- Altoparlante: CABLE-B (o equivalente – quello che catturiamo per tradurre la voce remota)
+- Microphone: CABLE-A (or equivalent — where upstream TTS is sent)
+- Speaker: CABLE-B (or equivalent — the remote audio source we capture)
 
-## Struttura del progetto
+## Project structure
 
-- `main.py`: entry-point. Orchestrazione, setup e ciclo di vita.
+- `main.py`: entry point. Orchestration, setup, and lifecycle.
 - `translator_bidir/`
-  - `config.py`: caricamento .env, config e logger
-  - `devices.py`: ricerca e risoluzione dei device audio
-  - `azure_clients.py`: factory di recognizer/synthesizer Azure
-  - `audio.py`: utilità per riproduzione WAV
-  - `workers.py`: worker thread TTS (queue -> synth -> play)
-  - `capture.py`: thread di cattura da CABLE-B verso PushAudioInputStream
-  - `handlers.py`: callback per eventi Azure (recognized, canceled, session)
+  - `config.py`: .env loading, config, and logger
+  - `devices.py`: audio device discovery and resolution
+  - `azure_clients.py`: Azure recognizer/synthesizer factories
+  - `audio.py`: WAV playback helpers
+  - `workers.py`: TTS worker threads (queue -> synth -> play)
+  - `capture.py`: capture thread feeding PushAudioInputStream from CABLE-B
+  - `handlers.py`: Azure event handlers (recognized, canceled, session)
 
-## Note
+## Notes
 
-- Il downsampling e il formato audio verso Azure sono fissati a 16kHz mono PCM 16-bit per la cattura remota.
-- La logica di silenzio (gate) è minimale e può essere regolata in `capture.py`.
+- Downstream capture uses 16 kHz mono PCM 16-bit for Azure.
+- The simple silence gate can be adjusted in `capture.py`.
+- If devices are not found, the system defaults are used where possible and a warning is logged.
 - Se i device non vengono trovati, il programma usa i default di sistema (dove possibile) e mostra un warning.
+
 

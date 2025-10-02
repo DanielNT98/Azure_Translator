@@ -1,12 +1,33 @@
+"""Configuration and logging utilities for the bidirectional translator.
+
+This module loads environment variables and provides a RotatingFile-based
+logger configured for the application.
+"""
+
 import os
 import logging
 from logging.handlers import RotatingFileHandler
 from dataclasses import dataclass
 from dotenv import load_dotenv
-from pathlib import Path
 
 @dataclass
 class Config:
+    """Strongly-typed container for runtime configuration.
+
+    Attributes:
+        SPEECH_KEY: Azure Speech service API key.
+        SPEECH_REGION: Azure region for the Speech service.
+        SRC_LANG: Upstream recognition language (you speak).
+        TGT_LANG: Upstream target translation language (to remote party).
+        VOICE_NAME: TTS voice name for upstream synthesis.
+        DOWN_SRC_LANG: Downstream recognition language (remote party speaks).
+        DOWN_TGT_LANG: Downstream target translation language (to you).
+        DOWN_VOICE_NAME: TTS voice name for downstream synthesis.
+        CABLE_A_PLAYBACK: Substring for output device that feeds your meeting mic.
+        CABLE_B_CAPTURE: Substring for input device capturing meeting audio.
+        MY_HEADPHONES: Substring for your headphones output (optional).
+        LOG_PATH: Path to the rotating log file.
+    """
     SPEECH_KEY: str
     SPEECH_REGION: str
 
@@ -26,17 +47,19 @@ class Config:
 
 
 def load_config() -> "Config":
-    # Ensure we load .env from the project root (folder containing main.py),
-    # even if the script is started from a different CWD.
-    project_root = Path(__file__).resolve().parents[1]
-    env_path = project_root / ".env"
-    load_dotenv(env_path)
+    """Load configuration from environment variables and .env file.
+
+    Returns:
+        Config: The loaded configuration object.
+
+    Raises:
+        RuntimeError: If mandatory Azure Speech variables are missing.
+    """
+    load_dotenv()
     speech_key = os.getenv("SPEECH__SERVICE__KEY")
     speech_region = os.getenv("SPEECH__SERVICE__REGION", "westeurope")
     if not speech_key or not speech_region:
-        raise RuntimeError(
-            f"Configura SPEECH__SERVICE__KEY e SPEECH__SERVICE__REGION nel .env ({env_path})"
-        )
+        raise RuntimeError("Configure SPEECH__SERVICE__KEY and SPEECH__SERVICE__REGION in .env")
 
     return Config(
         SPEECH_KEY=speech_key,
@@ -55,6 +78,16 @@ def load_config() -> "Config":
 
 
 def setup_logger(log_path: str) -> logging.Logger:
+    """Create and configure the application logger.
+
+    The logger writes to both console and a rotating file.
+
+    Args:
+        log_path: Path to the log file.
+
+    Returns:
+        logging.Logger: Configured logger instance.
+    """
     logger = logging.getLogger("translator")
     if logger.handlers:
         return logger
@@ -73,6 +106,6 @@ def setup_logger(log_path: str) -> logging.Logger:
 
     logger.addHandler(ch)
     logger.addHandler(fh)
-    logger.info("=== Avvio Translator Bidir ===")
+    logger.info("=== Translator Bidir startup ===")
     logger.info(f"Log file: {os.path.abspath(log_path)}")
     return logger

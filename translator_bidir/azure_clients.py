@@ -1,8 +1,18 @@
+"""Factories for Azure Speech recognizers and synthesizers."""
+
 from typing import Tuple
 import azure.cognitiveservices.speech as speechsdk
 
 
 def create_upstream_clients(cfg) -> Tuple[speechsdk.translation.TranslationRecognizer, speechsdk.SpeechSynthesizer]:
+    """Create upstream recognizer and synthesizer (you -> them).
+
+    Args:
+        cfg: Configuration with languages and voice.
+
+    Returns:
+        (recognizer_up, synth_up)
+    """
     trans_config_up = speechsdk.translation.SpeechTranslationConfig(
         subscription=cfg.SPEECH_KEY, region=cfg.SPEECH_REGION
     )
@@ -25,6 +35,11 @@ def create_upstream_clients(cfg) -> Tuple[speechsdk.translation.TranslationRecog
 
 
 def create_downstream_clients(cfg):
+    """Create downstream recognizer/synthesizer and PushAudioInputStream (them -> you).
+
+    Returns:
+        (recognizer_down, synth_down, push_stream_down)
+    """
     format_16k = speechsdk.audio.AudioStreamFormat(samples_per_second=16000, bits_per_sample=16, channels=1)
     push_stream_down = speechsdk.audio.PushAudioInputStream(format_16k)
     audio_input_down = speechsdk.audio.AudioConfig(stream=push_stream_down)

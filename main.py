@@ -1,3 +1,5 @@
+"""Entry point for the bidirectional translator application."""
+
 import time
 
 from translator_bidir.config import load_config, setup_logger
@@ -14,16 +16,18 @@ from translator_bidir.handlers import (
 
 
 def print_instructions():
-    print("\n=== ISTRUZIONI ===")
-    print("In Teams seleziona:")
-    print("  - Microfono  : 'CABLE Output' (cavo A)")
-    print("  - Altoparlante: 'CABLE-B Input' (cavo B)")
-    print("La tua traduzione va su CABLE Input (A) -> Teams sente solo quella.")
-    print("Loro vengono catturati da CABLE-B Output (B), tradotti e riprodotti sulle tue cuffie.")
-    print("Ctrl+C per terminare.\n")
+    """Print runtime instructions for audio routing in the meeting app."""
+    print("\n=== INSTRUCTIONS ===")
+    print("In your meeting app (Teams/Meet/Zoom), set:")
+    print("  - Microphone : 'CABLE-A Output' (cable A)")
+    print("  - Speaker    : 'CABLE-B Input' (cable B)")
+    print("Your translation (you->them) is synthesized to CABLE-A so the app hears only TTS.")
+    print("Remote audio (them) is captured from CABLE-B, translated, and played on your headphones.")
+    print("Press Ctrl+C to stop.\n")
 
 
 def main():
+    """Application bootstrap: config, devices, Azure clients, threads, and run loop."""
     cfg = load_config()
     logger = setup_logger(cfg.LOG_PATH)
 
@@ -65,7 +69,7 @@ def main():
         while True:
             time.sleep(0.2)
     except KeyboardInterrupt:
-        print("\nInterruzione…")
+        print("\nInterrupted…")
     finally:
         recognizer_up.stop_continuous_recognition()
         recognizer_down.stop_continuous_recognition()
@@ -73,7 +77,7 @@ def main():
         cap_thread.join(timeout=1.0)
         up_worker.stop()
         down_worker.stop()
-        logger.info("=== Arresto Translator Bidir ===")
+        logger.info("=== Translator Bidir shutdown ===")
 
 
 if __name__ == "__main__":
