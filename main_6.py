@@ -711,7 +711,8 @@ class FastTranslator:
                  push_stream, output_device_idx, channel, label):
         self.label = label
         self.channel = channel
-        self.config = speechsdk.translation.SpeechTranslationConfig(subscription=speech_key, region=region)
+        ENDPOINT_URL = f"wss://{region}.stt.speech.microsoft.com/speech/universal/v2"
+        self.config = speechsdk.translation.SpeechTranslationConfig(endpoint=ENDPOINT_URL, subscription=speech_key)
         self.config.speech_recognition_language = from_lang
         self.config.add_target_language(to_lang)
         self.config.voice_name = voice_name
