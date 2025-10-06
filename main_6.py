@@ -1,5 +1,6 @@
 # realtime_bridge_FAST_SPEECH.py
-# Versione con sintesi accelerata per ridurre ulteriormente la latenza
+# Versione con sintesi accelerata e chunking migliorato per speech continuo
+
 
 import os, io, wave, time, threading, logging, queue, traceback
 from dataclasses import dataclass
@@ -14,8 +15,10 @@ import hashlib
 import re
 
 
+
 # ====== Config & Log ======
 load_dotenv()
+
 
 
 def env(name, default=None):
@@ -23,14 +26,17 @@ def env(name, default=None):
     return v if (v is not None and v.strip()!="") else default
 
 
+
 SPEECH_KEY    = env("SPEECH__SERVICE__KEY", "<YOUR_SPEECH_KEY>")
 SPEECH_REGION = env("SPEECH__SERVICE__REGION", "westeurope")
 
 
+
 SRC_LANG      = env("SRC_LANG", "it-IT")
-TGT_LANG_UP   = env("TGT_LANG_UP", "it")
-DOWN_SRC_LANG = env("DOWN_SRC_LANG", "it-IT")
+TGT_LANG_UP   = env("TGT_LANG_UP", "en")
+DOWN_SRC_LANG = env("DOWN_SRC_LANG", "en-US")
 TGT_LANG_DOWN = env("TGT_LANG_DOWN", "it")
+
 
 
 CABLE_A_PLAYBACK = env("CABLE_A_PLAYBACK", "CABLE-A Input")
@@ -39,10 +45,12 @@ MY_HEADPHONES    = env("MY_HEADPHONES",    "")
 MIC_DEVICE_NAME  = env("MIC_DEVICE_NAME",  "Jack Mic (Realtek(R) Audio)")
 
 
+
 SAMPLE_RATE   = 16000
 CHANNELS      = 1
 FRAME_MS      = 10
 FRAME_SAMPLES = int(SAMPLE_RATE * FRAME_MS / 1000)
+
 
 
 ENERGY_THRESHOLD = float(env("VAD_THRESHOLD", "0.025"))
@@ -53,14 +61,25 @@ SOFT_LOCK_MS     = int(env("SOFT_LOCK_MS", "500"))
 BARGE_THRESHOLD  = float(env("BARGE_THRESHOLD", "0.050"))
 
 
+
 # ⚡ PARAMETRI BILANCIATI
 FIRST_CHUNK_WORDS = int(env("FIRST_CHUNK_WORDS", "2"))
 SUBSEQUENT_CHUNK_WORDS = int(env("SUBSEQUENT_CHUNK_WORDS", "5"))
 FIRST_CHUNK_STABILITY_MS = int(env("FIRST_CHUNK_STABILITY_MS", "250"))
-SUBSEQUENT_STABILITY_MS = int(env("SUBSEQUENT_STABILITY_MS", "400"))
+SUBSEQUENT_STABILITY_MS = int(env("SUBSEQUENT_STABILITY_MS", "500"))
 
-# 🚀 PARAMETRO VELOCITÀ SINTESI (nuovo!)
-SPEECH_RATE = env("SPEECH_RATE", "+45%")  # Valori: "+10%", "+20%", "+25%", "+30%", etc.
+
+# 🚀 PARAMETRO VELOCITÀ SINTESI
+SPEECH_RATE = env("SPEECH_RATE", "+40%")
+
+# 🆕 PARAMETRI OTTIMIZZATI - Anti-blocking + Anti-troncamento
+MAX_CHUNK_DELAY_MS = int(env("MAX_CHUNK_DELAY_MS", "3000"))         # 3 secondi
+MAX_PARTIAL_DURATION_MS = int(env("MAX_PARTIAL_DURATION_MS", "4000")) # 4 secondi
+GROWTH_THRESHOLD_WORDS = int(env("GROWTH_THRESHOLD_WORDS", "15"))   # 15 parole
+MIN_DELAY_BETWEEN_CHUNKS_MS = int(env("MIN_DELAY_BETWEEN_CHUNKS_MS", "800"))
+
+USE_PARTIALS = env("USE_PARTIALS", "0")  # "1" = usa parziali, "0" = solo final
+FINAL_SEG_MS = env("FINAL_SEG_MS", "100") 
 
 
 logging.basicConfig(
@@ -71,12 +90,19 @@ logging.basicConfig(
 log = logging.getLogger("bridge")
 
 
+
 thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="worker")
 
 
-# ====== Balanced Chunker (invariato) ======
+
+# ====== 🆕 Improved Balanced Chunker ======
 class BalancedChunker:
-    """Chunker bilanciato: primo chunk veloce, successivi fluidi"""
+    """
+    Chunker ottimizzato con validazione parole:
+    - Evita troncamenti ("fra" vs "frase")
+    - Safety net per speech continuo
+    - Priorità a boundary naturali
+    """
     
     def __init__(self, label="Chunker"):
         self.label = label
@@ -88,6 +114,14 @@ class BalancedChunker:
         self.strong_boundaries = re.compile(r'[.!?;:]')
         self.weak_boundaries = re.compile(r'[,]')
         self.stats = {"chunks": 0, "finals": 0, "skipped": 0}
+        
+        # Parametri ottimizzati
+        self.last_chunk_emission_time = 0
+        self.partial_start_time = 0
+        self.max_chunk_delay_ms = MAX_CHUNK_DELAY_MS
+        self.max_partial_duration_ms = MAX_PARTIAL_DURATION_MS
+        self.growth_threshold_words = GROWTH_THRESHOLD_WORDS
+        self.min_delay_between_chunks = MIN_DELAY_BETWEEN_CHUNKS_MS
     
     def _normalize(self, text: str) -> str:
         text = text.lower().strip()
@@ -109,74 +143,160 @@ class BalancedChunker:
             return min_words + len(text_until.split())
         return None
     
+    def _is_word_complete(self, word: str) -> bool:
+        """🆕 Verifica se una parola sembra completa (non troncata)"""
+        if not word:
+            return False
+        
+        # Parole molto corte senza punteggiatura sono sospette
+        if len(word) <= 2:
+            return False
+        
+        # Se termina con punteggiatura, è sicuramente completa
+        if word[-1] in '.!?,;:':
+            return True
+        
+        # Parole di 3+ caratteri probabilmente complete
+        return len(word) >= 3
+    
     def process_partial(self, new_text: str) -> Optional[str]:
         if not new_text or not new_text.strip():
             return None
+        
         new_text = new_text.strip()
         now_ms = time.time() * 1000
+        
+        # Inizializzazione
         if not self.last_partial:
             self.last_partial = new_text
             self.previous_partial = new_text
             self.last_change_time = now_ms
+            self.partial_start_time = now_ms
+            if self.last_chunk_emission_time == 0:
+                self.last_chunk_emission_time = now_ms
             return None
+        
+        # Aggiorna timestamp se il testo è cambiato
         if new_text != self.previous_partial:
             self.last_change_time = now_ms
             self.previous_partial = new_text
+        
+        # Calcola metriche temporali
         stability_time = now_ms - self.last_change_time
-        if not self.first_chunk_spoken:
-            min_words = FIRST_CHUNK_WORDS
-            required_stability = FIRST_CHUNK_STABILITY_MS
-        else:
-            min_words = SUBSEQUENT_CHUNK_WORDS
-            required_stability = SUBSEQUENT_STABILITY_MS
-        if stability_time < required_stability:
+        time_since_last_chunk = now_ms - self.last_chunk_emission_time
+        partial_duration = now_ms - self.partial_start_time
+        
+        # Hysteresis: Non emettere troppo frequentemente
+        if time_since_last_chunk < self.min_delay_between_chunks:
             self.last_partial = new_text
             return None
+        
+        # Determina parametri dinamici con DOPPIO MINIMO
+        if not self.first_chunk_spoken:
+            min_words_normal = FIRST_CHUNK_WORDS        # 2
+            min_words_safety = FIRST_CHUNK_WORDS + 2    # 4 🆕
+            required_stability = FIRST_CHUNK_STABILITY_MS
+        else:
+            min_words_normal = SUBSEQUENT_CHUNK_WORDS   # 5
+            min_words_safety = SUBSEQUENT_CHUNK_WORDS + 2  # 7 🆕
+            required_stability = SUBSEQUENT_STABILITY_MS
+        
+        # Analizza parole
         words = new_text.split()
         num_spoken = len(self.last_spoken_indices)
         unpronounced_words = words[num_spoken:]
-        if len(unpronounced_words) < min_words:
+        unpronounced_count = len(unpronounced_words)
+        
+        # 🆕 VALIDAZIONE PRE-EMISSIONE: ultima parola deve sembrare completa
+        if unpronounced_words and not self._is_word_complete(unpronounced_words[-1]):
+            # Se ultima parola sembra troncata, richiedi più stabilità
+            if stability_time < required_stability * 1.5:
+                self.last_partial = new_text
+                return None
+        
+        # Sistema a 2 livelli con minimo parole differenziato
+        should_emit = False
+        emission_reason = ""
+        
+        # LIVELLO 1: OPERAZIONE NORMALE (priorità massima)
+        if stability_time >= required_stability and unpronounced_count >= min_words_normal:
+            # Preferenza ASSOLUTA per boundary linguistici
+            boundary_pos = self._find_boundary_after_min(unpronounced_words, min_words_normal)
+            if boundary_pos or stability_time >= required_stability * 1.5:
+                should_emit = True
+                emission_reason = f"STABLE:{stability_time:.0f}ms"
+        
+        # LIVELLO 2: SAFETY NET (con minimo parole PIÙ ALTO)
+        elif time_since_last_chunk >= self.max_chunk_delay_ms and unpronounced_count >= min_words_safety:
+            should_emit = True
+            emission_reason = f"TIMEOUT:{time_since_last_chunk:.0f}ms"
+        
+        elif unpronounced_count >= self.growth_threshold_words:
+            should_emit = True
+            emission_reason = f"GROWTH:{unpronounced_count}w"
+        
+        elif partial_duration >= self.max_partial_duration_ms and unpronounced_count >= min_words_safety:
+            should_emit = True
+            emission_reason = f"FORCED:{partial_duration:.0f}ms"
+        
+        if not should_emit:
             self.last_partial = new_text
             return None
-        boundary_pos = self._find_boundary_after_min(unpronounced_words, min_words)
+        
+        # Seleziona chunk con PRIORITÀ per boundary naturali
+        boundary_pos = self._find_boundary_after_min(unpronounced_words, min_words_normal)
         if boundary_pos:
             chunk_words = unpronounced_words[:boundary_pos]
         else:
-            if not self.first_chunk_spoken:
-                chunk_words = unpronounced_words[:min_words]
-            else:
-                if len(unpronounced_words) >= min_words + 3:
-                    chunk_words = unpronounced_words[:min_words]
-                else:
-                    self.last_partial = new_text
-                    return None
+            # Nessun boundary: usa minimo safety per evitare frammenti
+            target_words = max(min_words_safety, min_words_normal + 3)
+            chunk_words = unpronounced_words[:min(unpronounced_count, target_words)]
+        
+        # 🆕 VALIDAZIONE FINALE: non emettere chunk con parola finale sospetta
+        if chunk_words and not self._is_word_complete(chunk_words[-1]):
+            self.last_partial = new_text
+            return None
+        
         chunk = ' '.join(chunk_words)
+        
+        # Aggiorna indici pronunciati
         for i in range(num_spoken, num_spoken + len(chunk_words)):
             self.last_spoken_indices.append(i)
+        
+        # Aggiorna statistiche e timestamp
         self.stats["chunks"] += 1
+        self.last_chunk_emission_time = now_ms
         self.first_chunk_spoken = True
         self.last_change_time = now_ms
+        
         mode = "FIRST" if self.stats["chunks"] == 1 else "FLOW"
-        log.info(f"{self.label} ✂️#{self.stats['chunks']} [{mode}|{stability_time:.0f}ms|{len(chunk_words)}w]: {chunk}")
+        log.info(f"{self.label} ✂️#{self.stats['chunks']} [{mode}|{emission_reason}|{len(chunk_words)}w]: {chunk}")
+        
         return chunk
     
     def finalize(self, final_text: str) -> Optional[str]:
         if not final_text or not final_text.strip():
             return None
+        
         final_text = final_text.strip()
         final_words = final_text.split()
+        
         if not self.last_spoken_indices:
             self.stats["finals"] += 1
             return final_text
+        
         if len(final_words) <= len(self.last_spoken_indices):
             log.info(f"{self.label} ✅ Skip finale (completo)")
             self.stats["skipped"] += 1
             return None
+        
         remaining_words = final_words[len(self.last_spoken_indices):]
+        
         if not remaining_words:
             log.info(f"{self.label} ✅ Completo")
             self.stats["skipped"] += 1
             return None
+        
         remaining = ' '.join(remaining_words)
         self.stats["finals"] += 1
         log.info(f"{self.label} ✅ Fine: +{len(remaining_words)}w")
@@ -193,16 +313,63 @@ class BalancedChunker:
         self.previous_partial = ""
         self.last_change_time = 0
         self.first_chunk_spoken = False
+        self.partial_start_time = 0
+        self.stats = {k: 0 for k in self.stats}
+
+    
+    def finalize(self, final_text: str) -> Optional[str]:
+        if not final_text or not final_text.strip():
+            return None
+        
+        final_text = final_text.strip()
+        final_words = final_text.split()
+        
+        if not self.last_spoken_indices:
+            self.stats["finals"] += 1
+            return final_text
+        
+        if len(final_words) <= len(self.last_spoken_indices):
+            log.info(f"{self.label} ✅ Skip finale (completo)")
+            self.stats["skipped"] += 1
+            return None
+        
+        remaining_words = final_words[len(self.last_spoken_indices):]
+        
+        if not remaining_words:
+            log.info(f"{self.label} ✅ Completo")
+            self.stats["skipped"] += 1
+            return None
+        
+        remaining = ' '.join(remaining_words)
+        self.stats["finals"] += 1
+        log.info(f"{self.label} ✅ Fine: +{len(remaining_words)}w")
+        return remaining
+    
+    def reset(self):
+        if self.stats["chunks"] > 0 or self.stats["finals"] > 0:
+            log.info(
+                f"{self.label} 📊 Reset - Chunks:{self.stats['chunks']} "
+                f"Finals:{self.stats['finals']} Skipped:{self.stats['skipped']}"
+            )
+        self.last_partial = ""
+        self.last_spoken_indices = []
+        self.previous_partial = ""
+        self.last_change_time = 0
+        self.first_chunk_spoken = False
+        self.partial_start_time = 0  # 🆕 Reset anche questo
+        # NON resettiamo last_chunk_emission_time per mantenere continuità tra frasi
         self.stats = {k: 0 for k in self.stats}
 
 
-# ====== Device discovery (invariato) ======
+
+# ====== Device discovery ======
 def _match_score(name: str, keyword: str) -> int:
     nl, kl = name.lower(), keyword.lower()
     if nl == kl: return 3
     if nl.startswith(kl): return 2
     if kl in nl: return 1
     return 0
+
 
 
 def _find_device_index(keyword: str, want_output: bool):
@@ -224,8 +391,10 @@ def _find_device_index(keyword: str, want_output: bool):
         return None, None
 
 
+
 def find_output_device_index(keyword: str): return _find_device_index(keyword, True)
 def find_input_device_index(keyword: str):  return _find_device_index(keyword, False)
+
 
 
 @dataclass
@@ -234,6 +403,7 @@ class Devices:
     a_play_idx: int|None
     b_cap_idx: int|None
     hp_play_idx: int|None
+
 
 
 def resolve_devices() -> Devices:
@@ -261,6 +431,7 @@ def resolve_devices() -> Devices:
         return Devices(None, None, None, None)
 
 
+
 def wav_bytes_to_float32(wav_bytes: bytes):
     try:
         w = wave.open(io.BytesIO(wav_bytes), 'rb')
@@ -273,11 +444,13 @@ def wav_bytes_to_float32(wav_bytes: bytes):
         raise
 
 
-# ====== Turn, VAD (invariati) ======
+
+# ====== Turn, VAD ======
 class Turn(Enum):
     A = "A"
     B = "B"
     IDLE = "IDLE"
+
 
 
 class TurnState:
@@ -292,6 +465,7 @@ class TurnState:
         self.max_energy = {"A": 0.0, "B": 0.0}
         self.energy_ema = {"A": 0.0, "B": 0.0}
         self.ema_alpha = 0.3
+
 
     def update_activity(self, channel: str, active: bool, energy: float = 0.0):
         try:
@@ -341,6 +515,7 @@ class TurnState:
             log.error(f"Errore update_activity: {e}")
             return False
 
+
     def _reset_channel(self, channel: str):
         self.confidence[channel] = 0.0
         self.speech_start_ms[channel] = 0.0
@@ -348,11 +523,14 @@ class TurnState:
         self.max_energy[channel] = 0.0
         self.energy_ema[channel] = 0.0
 
+
     def get_state(self) -> Turn:
         return self._state
 
 
+
 turn = TurnState()
+
 
 
 class EnergyVAD:
@@ -395,11 +573,13 @@ class EnergyVAD:
             return False, self.speaking, 0.0
 
 
+
 def make_vad():
     return EnergyVAD()
 
 
-# ====== 🚀 Fast Streaming TTS (con velocità configurabile) ======
+
+# ====== Fast Streaming TTS ======
 class FastStreamingTTS:
     """TTS con velocità configurabile tramite SSML"""
     
@@ -414,7 +594,7 @@ class FastStreamingTTS:
         self.play_idx = out_dev_idx
         self.label = label
         self.speech_rate = speech_rate
-        self.voice_name = voice_name  # 🔧 AGGIUNTO: salva voice_name
+        self.voice_name = voice_name
         self.play_queue = queue.Queue(maxsize=5)
         self.synth_lock = threading.Lock()
         self.shutdown_flag = threading.Event()
@@ -467,7 +647,6 @@ class FastStreamingTTS:
                     if self.shutdown_flag.is_set():
                         return
                     result = self.synth.speak_ssml(ssml)
-                    # print(result.cancellation_details.error_details)
             except Exception as e:
                 log.error(f"{self.label} Errore sintesi: {e}")
                 return
@@ -525,6 +704,7 @@ class FastStreamingTTS:
                     pass
 
 
+
 # ====== Fast Translator ======
 class FastTranslator:
     def __init__(self, speech_key, region, from_lang, to_lang, voice_name, 
@@ -535,12 +715,11 @@ class FastTranslator:
         self.config.speech_recognition_language = from_lang
         self.config.add_target_language(to_lang)
         self.config.voice_name = voice_name
-        self.config.set_property(speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, "100")
-        self.config.set_property(speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "2000")
+        self.config.set_property(speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, FINAL_SEG_MS)
+        self.config.set_property(speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "1500")
         audio_config = speechsdk.audio.AudioConfig(stream=push_stream)
         self.translator = speechsdk.translation.TranslationRecognizer(translation_config=self.config, audio_config=audio_config)
         
-        # 🔧 CORREZIONE: passa voice_name al costruttore
         self.tts = FastStreamingTTS(speech_key, region, voice_name, output_device_idx, f"{label}-TTS", SPEECH_RATE)
         
         self.to_lang = to_lang
@@ -550,6 +729,8 @@ class FastTranslator:
     
     def start(self):
         def on_recognizing(evt):
+            if USE_PARTIALS != "1":
+                return
             try:
                 if not self.running or turn.get_state().value != self.channel:
                     return
@@ -570,35 +751,46 @@ class FastTranslator:
                     return
                 if turn.get_state().value != self.channel:
                     return
-                source_text = evt.result.text
-                if not source_text:
+
+                src_text = evt.result.text or ""
+                if not src_text:
                     return
+
                 self.phrase_count += 1
-                log.info(f"{self.label}→ {source_text}")
-                translations = evt.result.translations
-                for lang, translated_text in translations.items():
+                log.info(f"{self.label}→ {src_text}")
+
+                # 🟢 Solo FINALI: parla l'intera traduzione del final
+                for lang, translated_text in evt.result.translations.items():
                     if not translated_text:
                         continue
-                    final_chunk = self.chunker.finalize(translated_text)
-                    if final_chunk:
-                        log.info(f"{self.label}←[{lang}] +FIN {final_chunk}")
-                        self.tts.speak(final_chunk)
-                    self.chunker.reset()
+                    log.info(f"{self.label}←[{lang}] FINAL {translated_text}")
+                    self.tts.speak(translated_text)
+
+                # pulizia chunker (non strettamente necessario ora)
+                self.chunker.reset()
+
             except Exception as e:
                 log.error(f"{self.label} Errore recognized: {e}")
-        
+
         def on_canceled(evt):
             details = evt.cancellation_details
             if details.reason == speechsdk.CancellationReason.Error:
                 log.error(f"{self.label} Errore: {details.error_details}")
         
         try:
-            self.translator.recognizing.connect(on_recognizing)
+            # Collega recognizing SOLO se vuoi i parziali
+            if USE_PARTIALS == "1":
+                self.translator.recognizing.connect(on_recognizing)
+
             self.translator.recognized.connect(on_recognized)
             self.translator.canceled.connect(on_canceled)
+
             self.running = True
             self.translator.start_continuous_recognition()
-            log.info(f"✅ {self.label} FAST (first:{FIRST_CHUNK_WORDS}w, then:{SUBSEQUENT_CHUNK_WORDS}w, speed:{SPEECH_RATE})")
+
+            mode = "FINALS_ONLY" if USE_PARTIALS != "1" else "PARTIALS+FINALS"
+            log.info(f"✅ {self.label} FAST [{mode}] (final seg: {FINAL_SEG_MS} ms, speed:{SPEECH_RATE})")
+
         except Exception as e:
             log.error(f"{self.label} Errore start: {e}")
             raise
@@ -613,6 +805,7 @@ class FastTranslator:
             log.error(f"{self.label} Errore stop: {e}")
 
 
+
 class CapturePipe:
     def __init__(self, in_dev_idx: int, push_stream, channel: str, label: str):
         self.in_dev_idx = in_dev_idx
@@ -623,6 +816,7 @@ class CapturePipe:
         self.stream = None
         self.running = False
         self.buf = b""
+
 
     def _cb(self, indata, frames, time_info, status):
         if not self.running:
@@ -641,6 +835,7 @@ class CapturePipe:
         except Exception as e:
             log.error(f"{self.label} Errore callback: {e}")
 
+
     def start(self):
         try:
             if self.in_dev_idx is None:
@@ -655,6 +850,7 @@ class CapturePipe:
             log.error(f"{self.label} Errore start: {e}")
             raise
 
+
     def stop(self):
         try:
             self.running = False
@@ -665,28 +861,39 @@ class CapturePipe:
             log.error(f"{self.label} Errore stop: {e}")
 
 
+
 def main():
     translator_up = translator_down = cap_up = cap_down = None
     push_up = push_down = None
     try:
         log.info("="*70)
-        log.info("🚀 Bridge FAST SPEECH - Sintesi Accelerata")
+        log.info("🚀 Bridge FAST SPEECH - Anti-Blocking Continuo")
         log.info("="*70)
         dev = resolve_devices()
         if not all([dev.a_play_idx, dev.b_cap_idx, dev.mic_idx]):
             log.error("❌ Device non risolti")
             return
-        voice_map = {"it": "it-IT-ElsaNeural", "en": "en-US-JennyNeural"}
-        push_up = speechsdk.audio.PushAudioInputStream()
-        push_down = speechsdk.audio.PushAudioInputStream()
+
+        voice_map = {
+            "it": "it-IT-GiuseppeNeural",
+            "it-IT": "it-IT-GiuseppeNeural",
+            "en": "en-US-GuyNeural",
+            "en-US": "en-US-GuyNeural",
+            "en-GB": "en-GB-RyanNeural"
+        }
+        audio_format = speechsdk.audio.AudioStreamFormat(
+            samples_per_second=16000, bits_per_sample=16, channels=1
+        )
+        push_up = speechsdk.audio.PushAudioInputStream(audio_format)
+        push_down = speechsdk.audio.PushAudioInputStream(audio_format)
         translator_up = FastTranslator(
             SPEECH_KEY, SPEECH_REGION, SRC_LANG, TGT_LANG_UP,
-            voice_map.get(TGT_LANG_UP, "en-US-JennyNeural"),
+            voice_map.get(TGT_LANG_UP, "en-US-GuyNeural"),
             push_up, dev.a_play_idx, "A", "[UP]"
         )
         translator_down = FastTranslator(
             SPEECH_KEY, SPEECH_REGION, DOWN_SRC_LANG, TGT_LANG_DOWN,
-            voice_map.get(TGT_LANG_DOWN, "it-IT-ElsaNeural"),
+            voice_map.get(TGT_LANG_DOWN, "it-IT-GiuseppeNeural"),
             push_down, dev.hp_play_idx, "B", "[DOWN]"
         )
         cap_up = CapturePipe(dev.mic_idx, push_up, "A", "[UP-VAD]")
@@ -696,10 +903,13 @@ def main():
         translator_up.start()
         translator_down.start()
         log.info("="*70)
-        log.info("🎙️  SISTEMA ATTIVO - Fast Speech Mode:")
-        log.info(f"   🚀 Velocità sintesi: {SPEECH_RATE} (riduce latenza ~20-30%)")
-        log.info(f"   ⚡ Primo chunk: {FIRST_CHUNK_WORDS} parole @ {FIRST_CHUNK_STABILITY_MS}ms")
-        log.info(f"   🌊 Chunk successivi: {SUBSEQUENT_CHUNK_WORDS} parole @ {SUBSEQUENT_STABILITY_MS}ms")
+        log.info("🎙️  SISTEMA ATTIVO - Modalità Anti-Blocking:")
+        log.info(f"   🚀 Velocità sintesi: {SPEECH_RATE}")
+        log.info(f"   ⏱️  Timeout chunk: {MAX_CHUNK_DELAY_MS}ms")
+        log.info(f"   📏 Crescita forzata: {GROWTH_THRESHOLD_WORDS} parole")
+        log.info(f"   ⏳ Max partial: {MAX_PARTIAL_DURATION_MS}ms")
+        log.info(f"   ⚡ Primo chunk: {FIRST_CHUNK_WORDS}w @ {FIRST_CHUNK_STABILITY_MS}ms")
+        log.info(f"   🌊 Successivi: {SUBSEQUENT_CHUNK_WORDS}w @ rilassata 100ms")
         log.info(f"   📢 UP: {SRC_LANG} → {TGT_LANG_UP}")
         log.info(f"   📥 DOWN: {DOWN_SRC_LANG} → {TGT_LANG_DOWN}")
         log.info("="*70)
@@ -723,6 +933,7 @@ def main():
             log.info("✅ Terminato")
         except Exception as e:
             log.error(f"Errore cleanup: {e}")
+
 
 
 if __name__ == "__main__":
