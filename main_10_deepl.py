@@ -6,6 +6,7 @@ import os, io, wave, time, threading, logging, queue, traceback
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, List
+from datetime import datetime
 import numpy as np
 import sounddevice as sd
 from concurrent.futures import ThreadPoolExecutor
@@ -107,13 +108,60 @@ USE_PARTIALS = env("USE_PARTIALS", "0")  # "1" = usa parziali, "0" = solo final
 FINAL_SEG_MS = env("FINAL_SEG_MS", "100") 
 
 
+# ====== 🆕 Setup Logging con File per Sessione ======
+# Genera nome file unico per ogni sessione
+SESSION_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE = f"azure_translator_session_{SESSION_TIMESTAMP}.log"
+
+# Usa il percorso assoluto dello script per la directory logs
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
+
+# Crea directory logs se non esiste
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
+
+LOG_FILE_PATH = os.path.join(LOG_DIR, LOG_FILE)
+
+# Rimuovi handler esistenti
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+# Setup logging con file + console
 logging.basicConfig(
     level=logging.INFO, 
     format="%(asctime)s [%(levelname)s] %(message)s", 
-    datefmt="%H:%M:%S"
+    datefmt="%H:%M:%S",
+    handlers=[
+        logging.FileHandler(LOG_FILE_PATH, mode='w', encoding='utf-8'),  # File log (nuovo per sessione)
+        logging.StreamHandler()  # Console
+    ]
 )
 log = logging.getLogger("bridge")
 
+# Log file della sessione
+log.info(f"📄 Log sessione: {LOG_FILE_PATH}")
+
+
+# ====== 🆕 Timing Utilities ======
+def get_precise_timestamp():
+    """Ottiene timestamp in millisecondi"""
+    return time.perf_counter() * 1000
+
+def format_timestamp(ts_ms):
+    """Formatta timestamp con millisecondi"""
+    dt = datetime.now()
+    return f"{dt.strftime('%H:%M:%S')}.{int(ts_ms % 1000):03d}"
+
+def log_timing(label, phase, ts_start=None, extra_info=""):
+    """Log con timestamp preciso per tracciare delay"""
+    ts_now = get_precise_timestamp()
+    if ts_start:
+        delay = ts_now - ts_start
+        log.info(f"⏱️  [{label}] {phase} | Delay: {delay:.1f}ms | {extra_info}")
+    else:
+        log.info(f"⏱️  [{label}] {phase} | Time: {format_timestamp(ts_now)} | {extra_info}")
+    return ts_now
 
 
 thread_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="worker")
@@ -712,6 +760,16 @@ class FastStreamingTTS:
         if text_hash == self.last_text_hash:
             return
         self.last_text_hash = text_hash
+        
+        # ⏱️ TIMING 3: TTS riceve il testo da pronunciare
+        ts_tts_received = log_timing(
+            self.label,
+            "🔊 TTS RECEIVED TEXT",
+            getattr(self, 'last_translation_time', None),
+            f"Text: '{text[:50]}...'" if len(text) > 50 else f"Text: '{text}'"
+        )
+        self.last_tts_received_time = ts_tts_received
+        
         try:
             thread_pool.submit(self._synthesize_and_queue, text)
         except Exception as e:
@@ -744,6 +802,14 @@ class FastStreamingTTS:
                 return
             
             if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+                # ⏱️ TIMING: Sintesi completata
+                log_timing(
+                    self.label,
+                    "🎙️  TTS SYNTHESIS COMPLETE",
+                    getattr(self, 'last_tts_received_time', None),
+                    f"Audio size: {len(result.audio_data)} bytes"
+                )
+                
                 try:
                     audio_data, sample_rate = wav_bytes_to_float32(result.audio_data)
                     # Applica volume traduzione
@@ -777,6 +843,14 @@ class FastStreamingTTS:
     def _play_audio(self, audio_data, sample_rate):
         stream = None
         try:
+            # ⏱️ TIMING 4: Audio arriva alle casse (inizio playback)
+            ts_playback_start = log_timing(
+                self.label,
+                "🔈 AUDIO PLAYBACK START",
+                getattr(self, 'last_tts_received_time', None),
+                f"Duration: {len(audio_data)/sample_rate:.2f}s"
+            )
+            
             # 🆕 Chiama callback PRIMA di iniziare la riproduzione
             if self.on_playback_start:
                 try:
@@ -794,6 +868,14 @@ class FastStreamingTTS:
                 chunk = audio_data[i:i+chunk_size]
                 stream.write(chunk.reshape(-1, 1))
             stream.stop()
+            
+            # ⏱️ TIMING: Fine playback
+            log_timing(
+                self.label,
+                "🔈 AUDIO PLAYBACK END",
+                ts_playback_start,
+                f"Total playback time"
+            )
         finally:
             if stream:
                 try:
@@ -904,12 +986,23 @@ class DeepLTranslator:
                     concluded = "".join(c["text"] for c in update["concluded"])
                     
                     if concluded and concluded != self.last_spoken_text:
+                        # ⏱️ TIMING 2: Traduttore rilascia testo tradotto
+                        ts_translation = log_timing(
+                            self.label, 
+                            "📝 TRANSLATION RECEIVED", 
+                            getattr(self, 'last_speech_start_time', None),
+                            f"Text: '{concluded[:50]}...'" if len(concluded) > 50 else f"Text: '{concluded}'"
+                        )
+                        
                         full_concluded_target += concluded
                         self.last_spoken_text = concluded
                         
                         # Ferma tastiera quando arriva traduzione
                         if self.capture_pipe and hasattr(self.capture_pipe, 'keyboard_stop_event'):
                             self.capture_pipe.keyboard_stop_event.set()
+                        
+                        # ⏱️ Store timestamp per TTS
+                        self.tts.last_translation_time = ts_translation
                         
                         # TTS non-blocking
                         log.info(f"{self.label} ← [{self.to_lang}] {concluded}")
@@ -1449,6 +1542,11 @@ class CapturePipe:
                 if self.call_center_mode and self.keyboard_audio is not None:
                     # Rileva transizione da non-parlante a parlante
                     if speaking and not self.last_speech_state and not self.keyboard_playing:
+                        # ⏱️ TIMING 1: Utente inizia a parlare
+                        ts_speech_start = log_timing(self.label, "🎤 SPEECH START", extra_info="User started speaking")
+                        if self.deepl_translator:
+                            self.deepl_translator.last_speech_start_time = ts_speech_start
+                        
                         # Inizia a parlare: invia tutto l'audio tastiera in thread separato
                         self.keyboard_stop_event.clear()
                         self.keyboard_playing = True
@@ -1605,6 +1703,7 @@ def main():
     try:
         log.info("="*70)
         log.info("🚀 DeepL Translation + Azure TTS Bridge")
+        log.info(f"📄 Session log: {LOG_FILE_PATH}")
         log.info("="*70)
         dev = resolve_devices()
         if not all([dev.a_play_idx, dev.b_cap_idx, dev.mic_idx]):
@@ -1737,6 +1836,53 @@ def main():
             if cap_down: cap_down.stop()
             thread_pool.shutdown(wait=False)
             log.info("✅ Terminato")
+            
+            # ====== 🆕 Genera Report Automatico ======
+            log.info("")
+            log.info("=" * 60)
+            log.info("📊 Generazione report timing...")
+            log.info("=" * 60)
+            
+            try:
+                # Import qui per evitare dipendenze circolari
+                import subprocess
+                import sys
+                
+                # Esegui analyze_timing.py con encoding UTF-8 esplicito
+                result = subprocess.run(
+                    [sys.executable, "analyze_timing.py", LOG_FILE_PATH],
+                    capture_output=True,
+                    text=True,
+                    cwd=os.path.dirname(os.path.abspath(__file__)),
+                    encoding='utf-8',
+                    errors='replace'  # Sostituisci caratteri problematici invece di crashare
+                )
+                
+                # Mostra output (sempre, anche se c'è errore)
+                if result.stdout:
+                    print(result.stdout)
+                
+                # Verifica esistenza file report (più affidabile del return code)
+                report_file = LOG_FILE_PATH.replace('.log', '_timing_report.txt')
+                if os.path.exists(report_file):
+                    log.info(f"✅ Report disponibile: {report_file}")
+                elif result.returncode == 0:
+                    log.info("✅ Report generato (controlla output sopra)")
+                else:
+                    log.warning(f"⚠️  Report non generato (exit code: {result.returncode})")
+                    if result.stderr:
+                        # Mostra più dettagli dell'errore
+                        error_lines = result.stderr.strip().split('\n')
+                        log.warning(f"   Errore: {error_lines[0]}")
+                        if len(error_lines) > 1:
+                            for line in error_lines[1:6]:  # Max 5 righe
+                                log.warning(f"   {line}")
+                        
+            except Exception as e:
+                log.warning(f"⚠️  Impossibile generare report: {e}")
+            
+            log.info("=" * 60)
+            
         except Exception as e:
             log.error(f"Errore cleanup: {e}")
 
