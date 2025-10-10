@@ -8,10 +8,8 @@ This project supports **two translation modes** with a shared modular architectu
 - **Translation Engine**: DeepL Voice API (WebSocket streaming)
 - **Features**: 
   - Combined STT + Translation in single service
-  - Low latency (~2.5s average)
   - Continuous audio streaming
   - Real-time WebSocket communication
-- **When to use**: Production use, best performance, simple setup
 
 ### 2. Azure Mode (`main_azure.py`)
 - **Translation Engine**: Azure Speech Translation API
@@ -19,8 +17,6 @@ This project supports **two translation modes** with a shared modular architectu
   - Separate STT + Text Translation
   - Balanced chunking for partial results
   - Event-driven architecture
-  - Higher latency (~3.5-4s average)
-- **When to use**: Azure ecosystem requirements, more control over translation pipeline
 
 ## 📁 Project Structure
 
