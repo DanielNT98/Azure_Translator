@@ -1,0 +1,82 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-09 17:49:39
+📄 Log file: logs\azure_translator_session_20251009_174401.log
+
+================================================================================
+📈 STATISTICHE PER SESSIONE
+================================================================================
+
+🔹 Sessione #1
+   Inizio: 17:44:02
+   Fine:   None
+
+🔹 Sessione #2
+   Inizio: 17:44:02
+   Fine:   17:44:23
+   Traduzioni: 0
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]-TTS                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  🔊 TTS RECEIVED TEXT (Overhead locale: traduzione → TTS)
+    📊 Campioni:   3
+    📈 Media:           0.8 ms
+    📉 Mediana:         0.8 ms
+    ⬇️  Minimo:          0.5 ms
+    ⬆️  Massimo:         1.0 ms
+    📊 Dev.Std:         0.3 ms
+    🎯 P95:             1.0 ms
+    ✅ Ottimo: Overhead locale minimo
+
+  🎙️  TTS SYNTHESIS COMPLETE (Tempo sintesi vocale Azure)
+    📊 Campioni:   3
+    📈 Media:         363.5 ms
+    📉 Mediana:       218.6 ms
+    ⬇️  Minimo:        202.8 ms
+    ⬆️  Massimo:       669.0 ms
+    📊 Dev.Std:       264.7 ms
+    🎯 P95:           669.0 ms
+    ✅ Buono: Sintesi veloce (target <500ms)
+
+  🔈 AUDIO PLAYBACK START (Tempo totale: TTS riceve → audio inizia)
+    📊 Campioni:   3
+    📈 Media:         364.2 ms
+    📉 Mediana:       219.2 ms
+    ⬇️  Minimo:        203.5 ms
+    ⬆️  Massimo:       669.8 ms
+    📊 Dev.Std:       264.8 ms
+    🎯 P95:           669.8 ms
+    ✅ Ottimo: Audio inizia velocemente
+
+  🔈 AUDIO PLAYBACK END (Durata riproduzione audio completa)
+    📊 Campioni:   3
+    📈 Media:        1617.0 ms
+    📉 Mediana:      1591.1 ms
+    ⬇️  Minimo:       1540.1 ms
+    ⬆️  Massimo:      1719.9 ms
+    📊 Dev.Std:        92.7 ms
+    🎯 P95:          1719.9 ms
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+✅ Nessun bottleneck significativo rilevato!
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+✅ Sistema performante! Tutte le metriche nei target.
+
+================================================================================
+📄 Report salvato: logs\azure_translator_session_20251009_174401_timing_report.txt
+================================================================================

@@ -1,0 +1,60 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-10 19:22:39
+📄 Log file: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251010_192204.log
+
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP-TTS]                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TTS SYNTHESIS COMPLETE (Tempo sintesi vocale Azure)
+    📊 Campioni:   5
+    📈 Media:         275.2 ms
+    📉 Mediana:       213.9 ms
+    ⬇️  Minimo:        195.5 ms
+    ⬆️  Massimo:       522.9 ms
+    📊 Dev.Std:       139.0 ms
+    🎯 P95:           522.9 ms
+    ✅ Ottimo: Sintesi molto veloce
+
+  AUDIO PLAYBACK START (Tempo totale: TTS riceve → audio inizia)
+    📊 Campioni:   5
+    📈 Media:         275.9 ms
+    📉 Mediana:       214.6 ms
+    ⬇️  Minimo:        196.6 ms
+    ⬆️  Massimo:       523.3 ms
+    📊 Dev.Std:       138.8 ms
+    🎯 P95:           523.3 ms
+    ✅ Ottimo: Audio inizia velocemente
+
+  AUDIO PLAYBACK END (Durata riproduzione audio completa)
+    📊 Campioni:   5
+    📈 Media:        1803.5 ms
+    📉 Mediana:      1879.7 ms
+    ⬇️  Minimo:       1220.8 ms
+    ⬆️  Massimo:      2199.1 ms
+    📊 Dev.Std:       358.2 ms
+    🎯 P95:          2199.1 ms
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+✅ Nessun bottleneck significativo rilevato!
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+✅ Sistema performante! Tutte le metriche nei target.
+
+================================================================================
+📄 Report salvato: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251010_192204_timing_report.txt
+================================================================================

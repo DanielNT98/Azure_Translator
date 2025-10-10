@@ -5,10 +5,17 @@ import os, io, wave, time, threading, logging, queue, traceback
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import sounddevice as sd
 import requests
-from dotenv import load_dotenv
+from dotenv imdef make_vad():
+    if _HAVE_WEBRTCVAD:
+        log.info("VAD: WebRTC VAD (mode=3 aggressivo)")
+        return WebRTCVADWrapper(mode=3)
+    log.info(f"VAD: Energy VAD (threshold={ENERGY_THRESHOLD:.4f})")
+    return EnergyVAD()oad_dotenv
 import azure.cognitiveservices.speech as speechsdk
 
 # ====== Config & Log ======
@@ -31,25 +38,25 @@ TGT_LANG_DOWN = env("TGT_LANG_DOWN", "it")
 CABLE_A_PLAYBACK = env("CABLE_A_PLAYBACK", "CABLE-A Input")
 CABLE_B_CAPTURE  = env("CABLE_B_CAPTURE",  "CABLE-B Output")
 MY_HEADPHONES    = env("MY_HEADPHONES",    "")
-MIC_DEVICE_NAME  = env("MIC_DEVICE_NAME",  "")
+MIC_DEVICE_NAME  = env("MIC_DEVICE_NAME",  "Microphone Array (3- Realtek(R)")  # Usa CABLE-A Input per catturare microfono
 
 SAMPLE_RATE   = 16000
 CHANNELS      = 1
 FRAME_MS      = 20
 FRAME_SAMPLES = int(SAMPLE_RATE * FRAME_MS / 1000)
 
-# VAD params
+# VAD params (ottimizzati per velocità)
 ENERGY_THRESHOLD = float(env("VAD_THRESHOLD", "0.035"))
-HANGOVER_MS      = int(env("VAD_HANGOVER_MS", "300"))
+HANGOVER_MS      = int(env("VAD_HANGOVER_MS", "150"))  # Ridotto da 300 per detection più veloce
 TURN_HYST_MS     = int(env("TURN_HYST_MS", "400"))
-MIN_SPEECH_MS    = int(env("MIN_SPEECH_MS", "350"))
+MIN_SPEECH_MS    = int(env("MIN_SPEECH_MS", "300"))  # Ridotto da 350
 SOFT_LOCK_MS     = int(env("SOFT_LOCK_MS", "800"))
 BARGE_THRESHOLD  = float(env("BARGE_THRESHOLD", "0.055"))
 
 # Streaming params
 ENABLE_PARTIAL_STREAMING = env("ENABLE_PARTIAL_STREAMING", "true").lower() == "true"
-PARTIAL_MIN_WORDS = int(env("PARTIAL_MIN_WORDS", "4"))  # Minimo parole per streaming parziale
-PARTIAL_DEBOUNCE_MS = int(env("PARTIAL_DEBOUNCE_MS", "800"))  # Debounce tra parziali
+PARTIAL_MIN_WORDS = int(env("PARTIAL_MIN_WORDS", "3"))  # Minimo parole per streaming parziale (ridotto per lag)
+PARTIAL_DEBOUNCE_MS = int(env("PARTIAL_DEBOUNCE_MS", "300"))  # Debounce tra parziali (ridotto per lag)
 
 logging.basicConfig(
     level=logging.INFO, 
@@ -57,6 +64,23 @@ logging.basicConfig(
     datefmt="%H:%M:%S"
 )
 log = logging.getLogger("bridge")
+
+# ====== Ottimizzazioni Performance ======
+# Connection pooling per API Translator
+translation_session = requests.Session()
+translation_session.headers.update({"Content-type": "application/json"})
+
+# Thread pool per traduzioni parallele
+translation_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="tr")
+
+# ====== Connection Pooling ======
+translation_session = requests.Session()  # Riusa connessioni TCP
+translation_session.headers.update({
+    "Content-type": "application/json",
+})
+
+# ====== Parallel Execution ======
+translation_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="translate")  # Per traduzioni parallele
 
 # ====== Device discovery ======
 def _match_score(name: str, keyword: str) -> int:
@@ -74,6 +98,7 @@ def _find_device_index(keyword: str, want_output: bool):
             ch_ok = (dev.get("max_output_channels",0)>0) if want_output else (dev.get("max_input_channels",0)>0)
             if not ch_ok: continue
             name = dev.get("name","")
+            print(name)
             score = _match_score(name, keyword)
             if score>0: cands.append((score, idx, name))
         if not cands: return None, None
@@ -118,6 +143,7 @@ def resolve_devices() -> Devices:
                 for i, dev in enumerate(sd.query_devices()):
                     if dev.get("max_input_channels",0) > 0:
                         name = dev.get("name","")
+                        print(name)
                         if ("cable" in name.lower()) or ("vb-audio" in name.lower()):
                             continue
                         mic_idx = i; mic_name = name
@@ -155,29 +181,40 @@ def resolve_devices() -> Devices:
 # ====== Utils ======
 def wav_bytes_to_float32(wav_bytes: bytes):
     try:
-        w = wave.open(io.BytesIO(wav_bytes), 'rb')
-        if w.getsampwidth()!=2: 
-            raise RuntimeError("TTS atteso PCM 16-bit")
-        data = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32)/32767.0
-        if w.getnchannels()>1:
-            data = data.reshape(-1, w.getnchannels())[:,0]
-        return data, w.getframerate()
+        # Prova prima come WAV standard
+        try:
+            w = wave.open(io.BytesIO(wav_bytes), 'rb')
+            if w.getsampwidth()!=2: 
+                raise RuntimeError("TTS atteso PCM 16-bit")
+            data = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32)/32767.0
+            if w.getnchannels()>1:
+                data = data.reshape(-1, w.getnchannels())[:,0]
+            return data, w.getframerate()
+        except:
+            # Se fallisce, potrebbe essere MP3 - Azure lo restituisce come WAV wrapped
+            # Riprova saltando header
+            data = np.frombuffer(wav_bytes[44:], dtype=np.int16).astype(np.float32)/32767.0  # Skip WAV header
+            return data, 16000  # Azure MP3 è sempre 16kHz
     except Exception as e:
-        log.error(f"Errore conversione WAV: {e}")
+        log.error(f"Errore conversione audio: {e}")
         raise
 
-def translate_text(text: str, to_lang: str, from_lang: str|None=None) -> Optional[str]:
-    if not text or not text.strip(): 
-        return None
+@lru_cache(maxsize=200)  # Cache per traduzioni ripetute
+def _translate_text_cached(text: str, to_lang: str, from_lang: str) -> Optional[str]:
+    """Wrapper cacheable per translate_text"""
+    return _translate_text_internal(text, to_lang, from_lang)
+
+def _translate_text_internal(text: str, to_lang: str, from_lang: str|None) -> Optional[str]:
+    """Implementazione interna della traduzione"""
     try:
         url = f"{TRANSLATOR_ENDPOINT}/translate?api-version=3.0&to={to_lang}"
         if from_lang: url += f"&from={from_lang}"
         h = {
             "Ocp-Apim-Subscription-Key": TRANSLATOR_KEY,
             "Ocp-Apim-Subscription-Region": TRANSLATOR_REGION,
-            "Content-type": "application/json",
         }
-        r = requests.post(url, headers=h, json=[{"text": text}], timeout=10)
+        # Usa session per connection pooling
+        r = translation_session.post(url, headers=h, json=[{"text": text}], timeout=3)  # Ridotto a 3s
         r.raise_for_status()
         return r.json()[0]["translations"][0]["text"]
     except requests.Timeout:
@@ -189,6 +226,23 @@ def translate_text(text: str, to_lang: str, from_lang: str|None=None) -> Optiona
     except Exception as e:
         log.error(f"❌ Errore traduzione: {e}\n{traceback.format_exc()}")
         return None
+
+def translate_text(text: str, to_lang: str, from_lang: str|None=None) -> Optional[str]:
+    """Traduce testo con caching e connection pooling"""
+    if not text or not text.strip(): 
+        return None
+    
+    # Usa cache se from_lang è specificato
+    if from_lang:
+        return _translate_text_cached(text, to_lang, from_lang)
+    else:
+        return _translate_text_internal(text, to_lang, None)
+
+def translate_text_async(text: str, to_lang: str, from_lang: str|None=None):
+    """Avvia traduzione in background, ritorna Future"""
+    if not text or not text.strip():
+        return None
+    return translation_executor.submit(translate_text, text, to_lang, from_lang)
 
 # ====== Turn state ======
 class Turn(Enum):
@@ -229,6 +283,9 @@ class TurnState:
                     energy_factor = min(2.0, energy / ENERGY_THRESHOLD)
                     
                     self.confidence[channel] = frame_factor * duration_factor * energy_factor
+                    
+                    if self.active_frames[channel] % 20 == 0:  # Log ogni 20 frame (~400ms)
+                        log.debug(f"[{channel}] conf={self.confidence[channel]:.2f} frames={self.active_frames[channel]} dur={duration:.0f}ms energy={energy:.4f}")
                     
                     target = Turn.A if channel == "A" else Turn.B
                     time_in_turn = now_ms - self.turn_started_at
@@ -348,7 +405,7 @@ except Exception:
     _HAVE_WEBRTCVAD = False
 
 class WebRTCVADWrapper:
-    def __init__(self, mode:int=2):
+    def __init__(self, mode:int=3):  # Mode 3 = più aggressivo, detection più veloce
         if not _HAVE_WEBRTCVAD:
             raise RuntimeError("webrtcvad non disponibile")
         self.vad = webrtcvad.Vad(mode)
@@ -385,8 +442,8 @@ class WebRTCVADWrapper:
 
 def make_vad():
     if _HAVE_WEBRTCVAD:
-        log.info("VAD: WebRTC VAD (mode=2)")
-        return WebRTCVADWrapper(mode=2)
+        log.info("VAD: WebRTC VAD (mode=3 - aggressivo)")
+        return WebRTCVADWrapper(mode=3)
     log.info(f"VAD: Energy VAD (threshold={ENERGY_THRESHOLD:.4f})")
     return EnergyVAD()
 
@@ -395,8 +452,8 @@ def make_recognizer(lang: str, push_stream):
     try:
         cfg = speechsdk.SpeechConfig(subscription=SPEECH_KEY, region=SPEECH_REGION)
         cfg.speech_recognition_language = lang
-        cfg.set_property(speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, "300")
-        #cfg.set_property(speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "5000")
+        cfg.set_property(speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, "200")  # Ridotto da 300
+        cfg.set_property(speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs, "3000")  # Timeout iniziale ridotto
         ac = speechsdk.audio.AudioConfig(stream=push_stream)
         return speechsdk.SpeechRecognizer(speech_config=cfg, audio_config=ac)
     except Exception as e:
@@ -405,11 +462,16 @@ def make_recognizer(lang: str, push_stream):
 
 # ====== Streaming TTS Engine ======
 class StreamingTTS:
-    """TTS con gestione seriale e robusta - UN task alla volta"""
+    """TTS con queue - TUTTI i segmenti vengono riprodotti in sequenza"""
     def __init__(self, speech_key, region, out_dev_idx: int|None, label: str):
         try:
+            speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=region)
+            # Formato audio ottimizzato per velocità
+            speech_config.set_speech_synthesis_output_format(
+                speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3
+            )
             self.synth = speechsdk.SpeechSynthesizer(
-                speech_config=speechsdk.SpeechConfig(subscription=speech_key, region=region),
+                speech_config=speech_config,
                 audio_config=None
             )
         except Exception as e:
@@ -418,109 +480,165 @@ class StreamingTTS:
             
         self.play_idx = out_dev_idx
         self.label = label
-        self.speaking_lock = threading.RLock()  # Lock ricorsivo per sicurezza
-        self.playing = False
-        self.current_stream = None
-        self.stop_requested = False
+        self.play_queue = queue.Queue()  # Queue per riproduzione sequenziale
+        self.queue_worker_running = False
+        self.worker_thread = None
         
         # Gestione parziali
         self.last_partial = ""
         self.last_final = ""
         self.last_speak_time = 0.0
+        self.shutdown = False
         
-    def stop(self):
-        """Stop immediato - thread-safe"""
+    def clear_queue(self):
+        """Svuota la queue (opzionale - per reset)"""
         try:
-            self.stop_requested = True
-            
-            # Stop stream audio
-            if self.current_stream:
+            while not self.play_queue.empty():
                 try:
-                    self.current_stream.abort()
-                except Exception:
-                    pass
-                self.current_stream = None
-            
-            # Stop synthesizer
-            try:
-                self.synth.stop_speaking()
-            except Exception:
-                pass
-                
-            self.playing = False
-            
+                    self.play_queue.get_nowait()
+                    self.play_queue.task_done()
+                except queue.Empty:
+                    break
+            log.debug(f"{self.label} Queue svuotata")
         except Exception as e:
-            log.debug(f"{self.label} Errore stop: {e}")
+            log.debug(f"{self.label} Errore clear_queue: {e}")
+    
+    def shutdown_worker(self):
+        """Ferma il worker thread"""
+        self.shutdown = True
+        if self.worker_thread:
+            self.worker_thread.join(timeout=2)
     
     def speak(self, text: str, is_partial: bool = False):
-        """Sintetizza e riproduci - SERIALE, un task alla volta"""
+        """Accoda il testo per riproduzione sequenziale - NESSUNA interruzione"""
         if not text or not text.strip():
             return
         
-        # Lock globale - solo UNA sintesi/riproduzione alla volta
-        with self.speaking_lock:
+        try:
+            # Throttling per parziali più aggressivo
+            now = time.time()
+            if is_partial:
+                # 400ms tra parziali (invece di 200ms) per ridurre duplicati
+                if (now - self.last_speak_time) < 0.4:
+                    log.debug(f"{self.label} Skip parziale (throttle)")
+                    return
+            self.last_speak_time = now
+            
+            # Filtro duplicati avanzato
+            if is_partial:
+                # Skip se identico al parziale precedente
+                if text == self.last_partial:
+                    return
+                # Skip se molto simile al final RECENTE (ultimi 5 secondi)
+                if self.last_final and hasattr(self, 'last_final_time'):
+                    time_since_final = now - self.last_final_time
+                    if time_since_final < 5.0:  # Solo se final è recente
+                        # Rimuovi punteggiatura e confronta
+                        text_clean = text.lower().replace(",", "").replace(".", "").replace("?", "").replace("!", "")
+                        final_clean = self.last_final.lower().replace(",", "").replace(".", "").replace("?", "").replace("!", "")
+                        if text_clean in final_clean or final_clean in text_clean:
+                            log.debug(f"{self.label} Skip parziale simile al final recente: '{text[:30]}...'")
+                            return
+                self.last_partial = text
+            else:
+                # Per FINAL: skip solo se IDENTICO (non simile!)
+                if text == self.last_final:
+                    log.debug(f"{self.label} Skip FINAL identico al precedente")
+                    return
+                
+                # Svuota parziali dalla queue quando arriva il final
+                removed = 0
+                temp_queue = []
+                while not self.play_queue.empty():
+                    try:
+                        item = self.play_queue.get_nowait()
+                        queued_text, queued_partial, queued_time = item
+                        # Mantieni solo i FINAL, scarta i PARTIAL
+                        if not queued_partial:
+                            temp_queue.append(item)
+                        else:
+                            removed += 1
+                            self.play_queue.task_done()
+                    except queue.Empty:
+                        break
+                
+                # Rimetti i FINAL in queue
+                for item in temp_queue:
+                    self.play_queue.put(item)
+                
+                if removed > 0:
+                    log.info(f"{self.label} 🧹 Rimossi {removed} parziali obsoleti dalla queue")
+                
+                self.last_final = text
+                self.last_final_time = now  # Timestamp del final
+                self.last_partial = ""  # Reset
+            
+            # ACCODA invece di eseguire subito
+            self.play_queue.put((text, is_partial, time.time()))
+            queue_size = self.play_queue.qsize()
+            log.info(f"{self.label} 📥 Accodato: '{text[:40]}...' (queue={queue_size})")
+            
+            # Avvia worker se non attivo
+            if not self.queue_worker_running:
+                self.queue_worker_running = True
+                self.worker_thread = threading.Thread(target=self._queue_worker, daemon=True)
+                self.worker_thread.start()
+                log.debug(f"{self.label} Worker avviato")
+                
+        except Exception as e:
+            log.error(f"{self.label} Errore speak: {e}")
+    
+    def _queue_worker(self):
+        """Worker che processa la queue sequenzialmente - NON interrompibile"""
+        log.info(f"{self.label} 🎬 Worker queue avviato")
+        while not self.shutdown:
             try:
-                # Throttling base
-                now = time.time()
-                if is_partial and (now - self.last_speak_time) < 0.5:
-                    return
-                self.last_speak_time = now
+                # Aspetta prossimo item (timeout per check shutdown)
+                text, is_partial, queued_at = self.play_queue.get(timeout=0.5)
                 
-                # Filtro duplicati
-                if is_partial:
-                    if text == self.last_partial:
-                        return
-                    if self.last_final and text.strip() in self.last_final:
-                        return
-                    self.last_partial = text
-                else:
-                    if text == self.last_final:
-                        return
-                    self.last_final = text
-                    self.last_partial = ""  # Reset
+                wait_time = (time.time() - queued_at) * 1000
+                log.info(f"{self.label} 🔊 Riproduco: '{text[:40]}...' (attesa={wait_time:.0f}ms)")
                 
-                # Stop qualsiasi riproduzione precedente
-                self.stop()
-                self.stop_requested = False
+                # Sintetizza e riproduci
+                self._speak_internal(text, is_partial)
                 
-                log.debug(f"{self.label} Sintesi: '{text[:40]}...' (partial={is_partial})")
+                self.play_queue.task_done()
                 
-                # Sintesi - SINCRONA
-                self.playing = True
-                result = self.synth.speak_text(text)
-                
-                if self.stop_requested:
-                    log.debug(f"{self.label} Interrotto durante sintesi")
-                    self.playing = False
-                    return
-                
-                if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-                    # Converti audio
-                    audio_data, sample_rate = wav_bytes_to_float32(result.audio_data)
-                    
-                    if self.stop_requested:
-                        self.playing = False
-                        return
-                    
-                    # Riproduci - SINCRONO con chunk interruttibili
-                    self._play_audio_sync(audio_data, sample_rate)
-                    
-                elif result.reason == speechsdk.ResultReason.Canceled:
-                    details = result.cancellation_details
-                    log.warning(f"{self.label} Cancellato: {details.reason}")
-                    if details.error_details:
-                        log.error(f"{self.label} Errore: {details.error_details}")
-                else:
-                    log.warning(f"{self.label} TTS fallito: {result.reason}")
-                
-                self.playing = False
-                
+            except queue.Empty:
+                # Queue vuota, continua ad aspettare
+                continue
             except Exception as e:
-                log.error(f"{self.label} Errore speak: {e}\n{traceback.format_exc()}")
-                self.playing = False
+                log.error(f"{self.label} Errore queue worker: {e}\n{traceback.format_exc()}")
+        
+        log.info(f"{self.label} Worker queue terminato")
+        self.queue_worker_running = False
+    
+    def _speak_internal(self, text: str, is_partial: bool):
+        """Sintesi e riproduzione effettiva - eseguita dal worker"""
+        try:
+            # Sintesi
+            result = self.synth.speak_text(text)
+            
+            if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+                # Converti audio
+                audio_data, sample_rate = wav_bytes_to_float32(result.audio_data)
+                
+                # Riproduci
+                self._play_audio_sync(audio_data, sample_rate)
+                
+            elif result.reason == speechsdk.ResultReason.Canceled:
+                details = result.cancellation_details
+                log.warning(f"{self.label} Cancellato: {details.reason}")
+                if details.error_details:
+                    log.error(f"{self.label} Errore: {details.error_details}")
+            else:
+                log.warning(f"{self.label} TTS fallito: {result.reason}")
+                
+        except Exception as e:
+            log.error(f"{self.label} Errore _speak_internal: {e}\n{traceback.format_exc()}")
     
     def _play_audio_sync(self, audio_data, sample_rate):
-        """Riproduzione SINCRONA con controllo interruzione"""
+        """Riproduzione SINCRONA completa - NON interrompibile"""
         stream = None
         try:
             stream = sd.OutputStream(
@@ -531,16 +649,11 @@ class StreamingTTS:
                 blocksize=1024
             )
             stream.start()
-            self.current_stream = stream
             
-            # Play in chunk da 50ms per permettere interruzione rapida
-            chunk_size = int(sample_rate * 0.05)
+            # Play in chunk da 20ms
+            chunk_size = int(sample_rate * 0.02)
             
             for i in range(0, len(audio_data), chunk_size):
-                if self.stop_requested:
-                    log.debug(f"{self.label} Playback interrotto")
-                    break
-                    
                 chunk = audio_data[i:i+chunk_size]
                 stream.write(chunk.reshape(-1, 1))
             
@@ -554,7 +667,6 @@ class StreamingTTS:
                     stream.close()
                 except Exception:
                     pass
-            self.current_stream = None
 
 # ====== CapturePipe ======
 class CapturePipe:
@@ -591,6 +703,11 @@ class CapturePipe:
                     self.silence_frames += 1
                 else:
                     self.silence_frames = 0
+                    if self.silence_frames == 0 and changed:
+                        log.debug(f"{self.label} 🎤 Voce rilevata! Energy={energy:.4f}")
+                
+                if changed and speaking:
+                    log.debug(f"{self.label} VAD: speaking={speaking}, energy={energy:.4f}")
                 
                 turn.update_activity(self.channel, speaking, energy)
                 self.writer(chunk)
@@ -627,6 +744,30 @@ class CapturePipe:
         except Exception as e:
             log.error(f"{self.label} Errore stop: {e}")
 
+# ====== Pre-warming ======
+def warmup_services():
+    """Pre-scalda connessioni API per ridurre latenza prima chiamata"""
+    try:
+        log.info("🔥 Pre-warming servizi...")
+        # Warmup traduzione
+        translate_text("test", "en", "it")
+        time.sleep(0.1)
+        translate_text("warmup", "it", "en")
+        log.info("✅ Pre-warming completato")
+    except Exception as e:
+        log.debug(f"Pre-warming fallito (non critico): {e}")
+
+# ====== Pre-warming ======
+def warmup():
+    try:
+        log.info("🔥 Pre-warming...")
+        translate_text("test", "en", "it")
+        time.sleep(0.05)
+        translate_text("warmup", "it", "en")
+        log.info("✅ Warmup OK")
+    except:
+        pass
+
 # ====== Main ======
 def main():
     try:
@@ -646,6 +787,9 @@ def main():
         tts_to_local   = StreamingTTS(SPEECH_KEY, SPEECH_REGION, dev.hp_play_idx, "[DN→TTS]")
         
         log.info("✅ TTS engines inizializzati")
+        
+        # Pre-warming in background
+        threading.Thread(target=warmup_services, daemon=True).start()
 
         # Capture pipes
         cap_up   = CapturePipe(dev.mic_idx,   lambda b: push_up.write(b),   "A", "[UP]")
@@ -695,10 +839,10 @@ def main():
         
         def on_recognizing_up(text: str):
             try:
+                log.debug(f"[UP~] Recognizing: '{text[:50]}...' (turno={turn.get_state().value})")
                 if not ENABLE_PARTIAL_STREAMING or not text.strip():
                     return
-                if turn.get_state() != Turn.A:
-                    return
+                # RIMOSSO: check del turno - traduci SEMPRE i parziali dell'utente
                 
                 words = text.split()
                 if len(words) >= PARTIAL_MIN_WORDS:
@@ -708,22 +852,22 @@ def main():
 
         def on_final_up(text: str):
             try:
+                log.info(f"[UP✓] Recognized FINAL: '{text}' (turno={turn.get_state().value})")
                 if not text.strip():
                     return
-                if turn.get_state() != Turn.A:
-                    log.debug(f"[UP] Ignoro (turno={turn.get_state().value}): {text[:30]}")
-                    return
+                # RIMOSSO: check del turno - traduci SEMPRE la voce dell'utente
                 
                 log.info(f"[UP→] {text}")
                 partial_count["up"] = 0
                 
-                tr = translate_text(text, TGT_LANG_UP, SRC_LANG)
-                if tr:
-                    log.info(f"[→EN] {tr}")
-                    tts_to_local.stop()
-                    tts_to_meeting.speak(tr, is_partial=False)
-                else:
-                    log.warning("[UP] Traduzione fallita")
+                f = translate_async(text, TGT_LANG_UP, SRC_LANG)
+                if f:
+                    tr = f.result(timeout=5)
+                    if tr:
+                        log.info(f"[→EN] {tr}")
+                        tts_to_meeting.speak(tr, is_partial=False)
+                    else:
+                        log.warning("[UP] Traduzione fallita")
             except Exception as e:
                 log.error(f"❌ Errore final UP: {e}\n{traceback.format_exc()}")
 
@@ -751,13 +895,14 @@ def main():
                 log.info(f"[DOWN←] {text}")
                 partial_count["down"] = 0
                 
-                tr = translate_text(text, TGT_LANG_DOWN, DOWN_SRC_LANG)
-                if tr:
-                    log.info(f"[←IT] {tr}")
-                    tts_to_meeting.stop()
-                    tts_to_local.speak(tr, is_partial=False)
-                else:
-                    log.warning("[DOWN] Traduzione fallita")
+                f = translate_async(text, TGT_LANG_DOWN, DOWN_SRC_LANG)
+                if f:
+                    tr = f.result(timeout=5)
+                    if tr:
+                        log.info(f"[←IT] {tr}")
+                        tts_to_local.speak(tr, is_partial=False)
+                    else:
+                        log.warning("[DOWN] Traduzione fallita")
             except Exception as e:
                 log.error(f"❌ Errore final DOWN: {e}\n{traceback.format_exc()}")
 
@@ -790,8 +935,8 @@ def main():
         rec_down.start_continuous_recognition()
         
         log.info("="*70)
-        log.info("🎙️  Bridge attivo - Gestione turni bilanciata + Streaming real-time")
-        log.info(f"   Min speech: {MIN_SPEECH_MS}ms | Hangover: {HANGOVER_MS}ms")
+        log.info("🚀 Bridge OTTIMIZZATO - Cache + Async + Connection Pool + Queue")
+        log.info(f"   Min speech: {MIN_SPEECH_MS}ms | Hangover: {HANGOVER_MS}ms (ottimizzato)")
         log.info(f"   Hysteresis: {TURN_HYST_MS}ms | Soft lock: {SOFT_LOCK_MS}ms")
         log.info(f"   VAD threshold: {ENERGY_THRESHOLD:.3f} | Barge-in: {BARGE_THRESHOLD:.3f}")
         if ENABLE_PARTIAL_STREAMING:
@@ -846,16 +991,22 @@ def main():
             except Exception as e:
                 log.debug(f"Errore stop cap_down: {e}")
             
-            # Stop TTS
+            # Stop TTS workers
             try:
-                tts_to_meeting.stop()
+                log.info("Terminazione TTS workers...")
+                tts_to_meeting.shutdown_worker()
             except Exception as e:
-                log.debug(f"Errore stop tts_meeting: {e}")
+                log.debug(f"Errore shutdown tts_meeting: {e}")
             
             try:
-                tts_to_local.stop()
+                tts_to_local.shutdown_worker()
             except Exception as e:
-                log.debug(f"Errore stop tts_local: {e}")
+                log.debug(f"Errore shutdown tts_local: {e}")
+            
+            try:
+                translation_executor.shutdown(wait=False)
+            except Exception as e:
+                log.debug(f"Errore shutdown executor: {e}")
             
             log.info("✅ Terminato")
         except Exception as e:

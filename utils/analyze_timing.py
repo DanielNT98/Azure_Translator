@@ -32,11 +32,11 @@ class TimingAnalyzer:
     def parse_logs(self):
         """Estrae timing e sessioni dai log"""
         # Pattern per timing con Delay
-        # Formato reale: HH:MM:SS [INFO] ... [[label] phase | Delay: XXms | extra
-        # Nota: è [[label] NON [[label]] - solo [ ] finale!
-        timing_pattern_delay = r'(\d{2}:\d{2}:\d{2})\s+\[INFO\].*?\[\[(.+?)\]\s+([^|]+?)\s+\|\s+Delay:\s+([\d.]+)ms\s+\|\s+(.+)'
+        # Formato: HH:MM:SS [INFO] TIMING [[[label]]] phase | Delay: XXms | extra
+        # Nota: label ha triple [ ma solo doppie ] → [[[label]]
+        timing_pattern_delay = r'(\d{2}:\d{2}:\d{2})\s+\[INFO\]\s+TIMING\s+\[\[\[(.+?)\]\]\s+([^|]+?)\s+\|\s+Delay:\s+([\d.]+)ms\s+\|\s+(.+)'
         # Pattern per timing con Time (primo evento senza delay)
-        timing_pattern_time = r'(\d{2}:\d{2}:\d{2})\s+\[INFO\].*?\[\[(.+?)\]\s+([^|]+?)\s+\|\s+Time:'
+        timing_pattern_time = r'(\d{2}:\d{2}:\d{2})\s+\[INFO\]\s+TIMING\s+\[\[\[(.+?)\]\]\s+([^|]+?)\s+\|\s+Time:'
         
         session_start_pattern = r'(\d{2}:\d{2}:\d{2}).*DeepL Translator started'
         session_end_pattern = r'(\d{2}:\d{2}:\d{2}).*DeepL Translator stopped'
@@ -192,14 +192,14 @@ class TimingAnalyzer:
             report.append(f"└{'─' * 78}┘")
             report.append("")
             
-            # Ordina per fase logica con descrizioni
+            # Ordina per fase logica con descrizioni (supporta con e senza emoji)
             phase_descriptions = {
-                '🎤 SPEECH START': '(Inizio parlato - evento di riferimento)',
-                '📝 TRANSLATION RECEIVED': '(Tempo da speech start a traduzione ricevuta)',
-                '🔊 TTS RECEIVED TEXT': '(Overhead locale: traduzione → TTS)',
-                '🎙️  TTS SYNTHESIS COMPLETE': '(Tempo sintesi vocale Azure)',
-                '🔈 AUDIO PLAYBACK START': '(Tempo totale: TTS riceve → audio inizia)',
-                '🔈 AUDIO PLAYBACK END': '(Durata riproduzione audio completa)'
+                'SPEECH START': '(Inizio parlato - evento di riferimento)',
+                'TRANSLATION RECEIVED': '(Tempo da speech start a traduzione ricevuta)',
+                'TTS RECEIVED TEXT': '(Overhead locale: traduzione → TTS)',
+                'TTS SYNTHESIS COMPLETE': '(Tempo sintesi vocale Azure)',
+                'AUDIO PLAYBACK START': '(Tempo totale: TTS riceve → audio inizia)',
+                'AUDIO PLAYBACK END': '(Durata riproduzione audio completa)'
             }
             
             phase_order = list(phase_descriptions.keys())
@@ -225,14 +225,14 @@ class TimingAnalyzer:
                         
                         # Aggiungi interpretazione in base al valore medio
                         avg = stats['avg']
-                        if '🔊 TTS RECEIVED TEXT' in phase:
+                        if 'TTS RECEIVED TEXT' in phase:
                             if avg < 10:
                                 report.append(f"    ✅ Ottimo: Overhead locale minimo")
                             elif avg < 50:
                                 report.append(f"    ⚠️  Accettabile: Overhead leggermente alto")
                             else:
                                 report.append(f"    ❌ Problematico: Overhead eccessivo")
-                        elif '🎙️  TTS SYNTHESIS' in phase:
+                        elif 'TTS SYNTHESIS' in phase:
                             if avg < 300:
                                 report.append(f"    ✅ Ottimo: Sintesi molto veloce")
                             elif avg < 500:
@@ -241,7 +241,7 @@ class TimingAnalyzer:
                                 report.append(f"    ⚠️  Accettabile: Sintesi un po' lenta")
                             else:
                                 report.append(f"    ❌ Lento: Sintesi troppo lenta (>800ms)")
-                        elif '🔈 AUDIO PLAYBACK START' in phase:
+                        elif 'AUDIO PLAYBACK START' in phase:
                             if avg < 500:
                                 report.append(f"    ✅ Ottimo: Audio inizia velocemente")
                             elif avg < 1000:
