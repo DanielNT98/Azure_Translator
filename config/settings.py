@@ -70,6 +70,7 @@ SUBSEQUENT_STABILITY_MS = int(get_env("SUBSEQUENT_STABILITY_MS", "500"))
 
 # Text-to-Speech Parameters
 SPEECH_RATE = get_env("SPEECH_RATE", "+35%")
+USE_REALTIME_TTS = get_env("USE_REALTIME_TTS", "1") == "1"  # Use RealtimeTTS for ultra-low latency
 
 # Audio Pass-through Configuration
 ENABLE_PASSTHROUGH_UP = get_env("ENABLE_PASSTHROUGH_UP", "1") == "1"
@@ -92,11 +93,15 @@ MIN_DELAY_BETWEEN_CHUNKS_MS = int(get_env("MIN_DELAY_BETWEEN_CHUNKS_MS", "800"))
 USE_PARTIALS = get_env("USE_PARTIALS", "0")
 FINAL_SEG_MS = get_env("FINAL_SEG_MS", "100")
 
+# DeepL Experimental Features
+# Enable early translation conclusion for lower latency (experimental - may cause hallucinations)
+DEEPL_EXPERIMENTAL_MODE = get_env("DEEPL_EXPERIMENTAL_MODE", "1") == "1"
+
 # Voice Name Mapping
 VOICE_MAP = {
     "it": "it-IT-GiuseppeNeural",
     "es": "es-ES-ElviraNeural",
-    "en": "en-US-GuyNeural",
+    "en": "en-US-ShimmerTurboMultilingualNeural",
     "de": "de-DE-KatjaNeural",
     "fr": "fr-FR-DeniseNeural",
 }

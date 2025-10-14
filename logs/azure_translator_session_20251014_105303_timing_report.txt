@@ -1,0 +1,101 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-14 10:54:23
+📄 Log file: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251014_105303.log
+
+================================================================================
+📈 STATISTICHE PER SESSIONE
+================================================================================
+
+🔹 Sessione #1
+   Inizio: 10:53:03
+   Fine:   None
+
+🔹 Sessione #2
+   Inizio: 10:53:03
+   Fine:   ongoing
+   Traduzioni: 13
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TRANSLATION RECEIVED (Tempo da speech start a traduzione ricevuta)
+    📊 Campioni:   13
+    📈 Media:        3751.1 ms
+    📉 Mediana:      3214.9 ms
+    ⬇️  Minimo:       1689.7 ms
+    ⬆️  Massimo:      8992.1 ms
+    📊 Dev.Std:      1820.1 ms
+    🎯 P95:          8992.1 ms
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]-TTS                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TTS RECEIVED TEXT (Overhead locale: traduzione → TTS)
+    📊 Campioni:   14
+    📈 Media:        2801.5 ms
+    📉 Mediana:         1.0 ms
+    ⬇️  Minimo:          0.5 ms
+    ⬆️  Massimo:      8125.3 ms
+    📊 Dev.Std:      3484.3 ms
+    🎯 P95:          8125.3 ms
+    ❌ Problematico: Overhead eccessivo
+
+  TTS SYNTHESIS COMPLETE (Tempo sintesi vocale Azure)
+    📊 Campioni:   14
+    📈 Media:         299.1 ms
+    📉 Mediana:       274.2 ms
+    ⬇️  Minimo:        139.1 ms
+    ⬆️  Massimo:       674.4 ms
+    📊 Dev.Std:       117.7 ms
+    🎯 P95:           674.4 ms
+    ✅ Ottimo: Sintesi molto veloce
+
+  AUDIO PLAYBACK START (Tempo totale: TTS riceve → audio inizia)
+    📊 Campioni:   14
+    📈 Media:         320.9 ms
+    📉 Mediana:       278.2 ms
+    ⬇️  Minimo:        139.5 ms
+    ⬆️  Massimo:       675.2 ms
+    📊 Dev.Std:       136.9 ms
+    🎯 P95:           675.2 ms
+    ✅ Ottimo: Audio inizia velocemente
+
+  AUDIO PLAYBACK END (Durata riproduzione audio completa)
+    📊 Campioni:   14
+    📈 Media:         983.9 ms
+    📉 Mediana:       931.1 ms
+    ⬇️  Minimo:        710.1 ms
+    ⬆️  Massimo:      1657.5 ms
+    📊 Dev.Std:       273.1 ms
+    🎯 P95:          1657.5 ms
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+⚠️  UP]:TRANSLATION RECEIVED: Media 3751.1ms > 1500ms (target)
+⚠️  UP]:TRANSLATION RECEIVED: Max (8992.1ms) >> Media (3751.1ms) - Variabilità alta
+⚠️  UP]-TTS:TTS RECEIVED TEXT: Max (8125.3ms) >> Media (2801.5ms) - Variabilità alta
+⚠️  UP]-TTS:TTS SYNTHESIS COMPLETE: Max (674.4ms) >> Media (299.1ms) - Variabilità alta
+⚠️  UP]-TTS:AUDIO PLAYBACK START: Max (675.2ms) >> Media (320.9ms) - Variabilità alta
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+🔴 CRITICO: Latenza traduzione molto alta (>2s). Verifica connessione DeepL.
+🟡 WARNING: Variabilità alta nella traduzione. Connessione instabile?
+
+================================================================================
+📄 Report salvato: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251014_105303_timing_report.txt
+================================================================================

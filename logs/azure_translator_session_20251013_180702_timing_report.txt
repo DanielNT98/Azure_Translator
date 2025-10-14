@@ -1,0 +1,98 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-13 18:08:31
+📄 Log file: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251013_180702.log
+
+================================================================================
+📈 STATISTICHE PER SESSIONE
+================================================================================
+
+🔹 Sessione #1
+   Inizio: 18:07:03
+   Fine:   None
+
+🔹 Sessione #2
+   Inizio: 18:07:03
+   Fine:   ongoing
+   Traduzioni: 22
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TRANSLATION RECEIVED (Tempo da speech start a traduzione ricevuta)
+    📊 Campioni:   22
+    📈 Media:        3208.3 ms
+    📉 Mediana:      3237.9 ms
+    ⬇️  Minimo:        327.5 ms
+    ⬆️  Massimo:      6080.8 ms
+    📊 Dev.Std:      1400.5 ms
+    🎯 P95:          5756.6 ms
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]-TTS                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TTS RECEIVED TEXT (Overhead locale: traduzione → TTS)
+    📊 Campioni:   8
+    📈 Media:           0.9 ms
+    📉 Mediana:         0.9 ms
+    ⬇️  Minimo:          0.7 ms
+    ⬆️  Massimo:         1.2 ms
+    📊 Dev.Std:         0.2 ms
+    🎯 P95:             1.2 ms
+    ✅ Ottimo: Overhead locale minimo
+
+  TTS SYNTHESIS COMPLETE (Tempo sintesi vocale Azure)
+    📊 Campioni:   8
+    📈 Media:         329.5 ms
+    📉 Mediana:       333.9 ms
+    ⬇️  Minimo:         31.0 ms
+    ⬆️  Massimo:       619.8 ms
+    📊 Dev.Std:       165.1 ms
+    🎯 P95:           619.8 ms
+    ✅ Buono: Sintesi veloce (target <500ms)
+
+  AUDIO PLAYBACK START (Tempo totale: TTS riceve → audio inizia)
+    📊 Campioni:   8
+    📈 Media:         550.0 ms
+    📉 Mediana:       362.9 ms
+    ⬇️  Minimo:         31.9 ms
+    ⬆️  Massimo:      1487.7 ms
+    📊 Dev.Std:       508.9 ms
+    🎯 P95:          1487.7 ms
+    ⚠️  Accettabile: Latenza percettibile
+
+  AUDIO PLAYBACK END (Durata riproduzione audio completa)
+    📊 Campioni:   6
+    📈 Media:        1361.9 ms
+    📉 Mediana:      1423.3 ms
+    ⬇️  Minimo:        880.8 ms
+    ⬆️  Massimo:      1784.6 ms
+    📊 Dev.Std:       334.5 ms
+    🎯 P95:          1784.6 ms
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+⚠️  UP]:TRANSLATION RECEIVED: Media 3208.3ms > 1500ms (target)
+⚠️  UP]-TTS:AUDIO PLAYBACK START: Max (1487.7ms) >> Media (550.0ms) - Variabilità alta
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+🔴 CRITICO: Latenza traduzione molto alta (>2s). Verifica connessione DeepL.
+🟡 WARNING: Variabilità alta nella traduzione. Connessione instabile?
+
+================================================================================
+📄 Report salvato: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251013_180702_timing_report.txt
+================================================================================

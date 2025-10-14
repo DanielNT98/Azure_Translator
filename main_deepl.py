@@ -27,6 +27,14 @@ from translation import DeepLTranslator
 # Import audio components
 from audio import CapturePipe
 
+# Import TTS (RealtimeTTS or standard Azure TTS based on config)
+if settings.USE_REALTIME_TTS:
+    from tts.realtime_azure_tts import RealtimeAzureTTS as TTSEngine
+    print("🚀 Using RealtimeTTS for ultra-low latency")
+else:
+    from tts.azure_tts import FastStreamingTTS as TTSEngine
+    print("📢 Using standard Azure TTS")
+
 # Import utilities
 from utils import setup_logging
 

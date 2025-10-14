@@ -35,7 +35,8 @@ Azure__Transaltor/
 │   ├── azure_translator.py # Azure STT + Translation
 │   └── chunker.py          # Balanced text chunker (Azure only)
 ├── tts/
-│   └── azure_tts.py        # Fast streaming TTS (shared)
+│   ├── azure_tts.py        # Standard Azure TTS (shared)
+│   └── realtime_azure_tts.py  # RealtimeTTS (3x faster, optional)
 ├── audio/
 │   └── capture_pipe.py     # Audio capture + VAD (shared)
 └── utils/
@@ -67,6 +68,9 @@ SPEECH__SERVICE__REGION=westeurope
 
 # DeepL API
 DEEPL_API_KEY=your_deepl_key
+
+# DeepL Experimental Mode (Lower latency, may cause hallucinations)
+DEEPL_EXPERIMENTAL_MODE=1  # 1=enabled, 0=disabled
 
 # Languages
 SRC_LANG=it
@@ -103,7 +107,8 @@ KEYBOARD_SOUND_FILE=computer-keyboard-typing-290582.wav
 | Feature | DeepL Mode | Azure Mode |
 |---------|------------|------------|
 | **Translation Engine** | DeepL Voice API | Azure Speech Translation |
-| **Architecture** | WebSocket streaming | Event-driven callbacks ||
+| **Architecture** | WebSocket streaming | Event-driven callbacks |
+| **Latency** | ~2.5s (standard)<br>**~1.5-2s** (experimental) | ~3.5-4s |
 | **Chunking** | Not needed | BalancedChunker |
 | **Partial Results** | Built-in | Optional (USE_PARTIALS) |
 | **Cost** | DeepL API | Azure Speech + Translation |
@@ -129,11 +134,12 @@ Both modes share these core components:
    - Hysteresis and soft-locking
    - Barge-in detection
 
-4. **TTS Engine** (`tts/azure_tts.py`)
-   - Azure Neural Voices
-   - SSML speed control (+35%)
-   - Thread-pooled synthesis
-   - Queue-based playback
+4. **TTS Engine** (2 options)
+   - **Standard** (`tts/azure_tts.py`): Azure Neural Voices, SSML speed control
+   - **RealtimeTTS** (`tts/realtime_azure_tts.py`): Ultra-low latency (3x faster)
+     - Enable with `USE_REALTIME_TTS=1` in `.env`
+     - See `REALTIME_TTS_GUIDE.md` for details
+   - Both use thread-pooled synthesis and queue-based playback
 
 5. **Device Management** (`core/audio_devices.py`)
    - Auto-discovery
@@ -157,7 +163,28 @@ Both modes share these core components:
 
 To switch modes, just run the other main file. Configuration is shared, so no changes needed to `.env`.
 
+## ⚡ DeepL Experimental Mode (Lower Latency)
 
+DeepL has released an **experimental feature** that significantly reduces translation latency:
+
+```env
+DEEPL_EXPERIMENTAL_MODE=1  # Enable lower latency mode
+```
+
+**Benefits:**
+- ✅ Much lower latency (faster translations)
+- ✅ Better user experience for real-time conversations
+
+**Risks:**
+- ⚠️ May cause occasional **hallucinations** (incorrect translations)
+- ⚠️ Still in early access, behavior may change
+
+**Recommendation:**
+- Enable for **testing and demos** to experience the speed improvement
+- Monitor for translation accuracy issues
+- Disable if hallucinations become problematic: `DEEPL_EXPERIMENTAL_MODE=0`
+
+This feature uses DeepL's `enable_early_translation_conclusion` parameter to conclude translations earlier in the pipeline, reducing end-to-end latency at the potential cost of accuracy.
 
 ## 🐛 Debugging
 
