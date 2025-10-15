@@ -114,9 +114,16 @@ class DeepLTranslator:
         
         # Translation buffer for smooth TTS streaming
         self.translation_buffer = ""  # Accumulates chunks for smoother TTS output
-        self.min_buffer_length = 15  # Minimum characters before flushing
-        self.max_buffer_length = 30  # Maximum characters before forced flush
+        
+        # ⚡ ADAPTIVE BUFFER STRATEGY for low latency first chunk + fluidity
+        self.is_first_translation = True  # Track if this is first translation
+        self.min_buffer_length = 12  # Minimum characters before flushing
+        self.min_buffer_length_first = 5  # Low for first chunk (quick response!)
+        self.max_buffer_length = 40  # Maximum characters before forced flush (INCREASED for fewer, bigger chunks)
+        self.max_buffer_length_first = 18  # Reasonable size for first chunk (not too small!)
         self.buffer_timeout = 2.0  # Seconds before forced flush
+        self.buffer_timeout_first = 1.0  # Timeout for first chunk (1 second)
+        
         self.last_buffer_update_time = None  # Track when buffer was last updated
     
     def _on_translation_start(self):
@@ -153,7 +160,7 @@ class DeepLTranslator:
         current_time = time.time()
         
         # Define sentence delimiters
-        delimiters = ['.', '!', '?', ';', ':', ",", "..."]
+        delimiters = ['.', '!', '?', ';', ':', ","]
         
         # CONDITION 1: Force flush (end of transcript or explicit stop)
         if force:
@@ -167,26 +174,35 @@ class DeepLTranslator:
                 return True
             return False
         
+        # ⚡ ADAPTIVE THRESHOLDS: Use lower limits for first translation (faster response!)
+        active_min_length = self.min_buffer_length_first if self.is_first_translation else self.min_buffer_length
+        active_max_length = self.max_buffer_length_first if self.is_first_translation else self.max_buffer_length
+        active_timeout = self.buffer_timeout_first if self.is_first_translation else self.buffer_timeout
+        
         # CONDITION 2: Max buffer length exceeded (safety limit)
-        if buffer_length > self.max_buffer_length:
+        if buffer_length > active_max_length:
             text_to_send = self.translation_buffer.strip()
-            logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} [MAX LENGTH: {buffer_length} chars]")
+            mode_tag = "[FIRST-MAX]" if self.is_first_translation else "[MAX LENGTH]"
+            logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} {mode_tag}: {buffer_length} chars")
             self.tts.speak(text_to_send)
             self.phrase_count += 1
             self.translation_buffer = ""
             self.last_buffer_update_time = None
+            self.is_first_translation = False  # No longer first translation
             return True
         
-        # CONDITION 3: Timeout expired (no updates for 2 seconds)
-        if self.last_buffer_update_time and (current_time - self.last_buffer_update_time) > self.buffer_timeout:
+        # CONDITION 3: Timeout expired
+        if self.last_buffer_update_time and (current_time - self.last_buffer_update_time) > active_timeout:
             text_to_send = self.translation_buffer.strip()
             if text_to_send:
                 timeout_duration = current_time - self.last_buffer_update_time
-                logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} [TIMEOUT: {timeout_duration:.1f}s]")
+                mode_tag = "[FIRST-TIMEOUT]" if self.is_first_translation else "[TIMEOUT]"
+                logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} {mode_tag}: {timeout_duration:.1f}s")
                 self.tts.speak(text_to_send)
                 self.phrase_count += 1
                 self.translation_buffer = ""
                 self.last_buffer_update_time = None
+                self.is_first_translation = False  # No longer first translation
                 return True
         
         # CONDITION 4: Natural delimiter found (NO minimum length requirement!)
@@ -220,8 +236,12 @@ class DeepLTranslator:
             
             # Only send if there's actual text content (not just delimiters/spaces)
             if text_to_send and text_without_delimiters.strip():
-                logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} [DELIMITER: '{first_delimiter}']")
-                self.tts.speak(text_to_send)
+                # ⚡ Check if meets minimum length (adaptive based on first/subsequent)
+                if len(text_to_send) >= active_min_length:
+                    mode_tag = "[FIRST-DELIM]" if self.is_first_translation else "[DELIMITER]"
+                    logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} {mode_tag}: '{first_delimiter}'")
+                    self.tts.speak(text_to_send)
+                    self.is_first_translation = False  # No longer first translation
                 self.phrase_count += 1
                 
                 # Keep remaining text in buffer (skip past the delimiter)
@@ -308,6 +328,12 @@ class DeepLTranslator:
         try:
             while self.running and self.websocket:
                 await asyncio.sleep(0.5)
+                
+                # ⚡ Reset first translation flag if buffer has been empty for a while (new conversation)
+                if not self.translation_buffer and not self.is_first_translation:
+                    # Buffer empty - next translation will be "first" again
+                    logger.debug(f"{self.label} 🔄 Buffer empty - resetting first translation flag for next conversation")
+                    self.is_first_translation = True
                 
                 # Check if buffer has timed out
                 if self.translation_buffer and self.last_buffer_update_time:

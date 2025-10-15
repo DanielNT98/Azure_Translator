@@ -38,7 +38,7 @@ DEEPL_API_URL = get_env("DEEPL_API_URL", "https://api.deepl.com/v1/voice/realtim
 
 # Language Configuration
 SRC_LANG = get_env("SRC_LANG", "it")  # DeepL uses "it" not "it-IT"
-TGT_LANG_UP = get_env("TGT_LANG_UP", "en")
+TGT_LANG_UP = get_env("TGT_LANG_UP", "it")
 DOWN_SRC_LANG = get_env("DOWN_SRC_LANG", "en")
 TGT_LANG_DOWN = get_env("TGT_LANG_DOWN", "it")
 
@@ -69,7 +69,7 @@ FIRST_CHUNK_STABILITY_MS = int(get_env("FIRST_CHUNK_STABILITY_MS", "250"))
 SUBSEQUENT_STABILITY_MS = int(get_env("SUBSEQUENT_STABILITY_MS", "500"))
 
 # Text-to-Speech Parameters
-SPEECH_RATE = get_env("SPEECH_RATE", "+35%")
+SPEECH_RATE = get_env("SPEECH_RATE", "+50%")
 USE_REALTIME_TTS = get_env("USE_REALTIME_TTS", "1") == "1"  # Use RealtimeTTS for ultra-low latency
 
 # Audio Pass-through Configuration
@@ -98,8 +98,10 @@ FINAL_SEG_MS = get_env("FINAL_SEG_MS", "100")
 DEEPL_EXPERIMENTAL_MODE = get_env("DEEPL_EXPERIMENTAL_MODE", "1") == "1"
 
 # Voice Name Mapping
+# ⭐ Using premium neural voices for better prosody, intonation, and natural accents
 VOICE_MAP = {
-    "it": "it-IT-GiuseppeNeural",
+    
+    "it": "it-IT-IsabellaNeural",  # Alternative: Female - Very expressive and natural
     "es": "es-ES-ElviraNeural",
     "en": "en-US-ShimmerTurboMultilingualNeural",
     "de": "de-DE-KatjaNeural",
