@@ -6,3 +6,4 @@ soundfile>=0.12
 websockets>=12.0
 aiohttp>=3.9.0
 RealtimeTTS>=0.5.7
+elevenlabs>=1.9.0

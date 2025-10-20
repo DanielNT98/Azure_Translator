@@ -71,15 +71,43 @@ class DeepLTranslator:
             label (str): Label for logging
             capture_pipe (CapturePipe, optional): Audio capture pipe reference
         """
-        # Import TTS based on configuration (RealtimeTTS or standard)
-        from config.settings import SPEECH_RATE, USE_REALTIME_TTS
+        # Import TTS based on configuration
+        from config.settings import (
+            SPEECH_RATE, USE_REALTIME_TTS, USE_ELEVENLABS_TTS,
+            ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL
+        )
         
-        if USE_REALTIME_TTS:
+        # Choose TTS engine (priority: ElevenLabs > RealtimeTTS > Standard Azure)
+        if USE_ELEVENLABS_TTS:
+            from tts.elevenlabs_tts import ElevenLabsTTS as TTSEngine
+            logger.info(f"{label} Using ElevenLabs TTS (EXPERIMENTAL)")
+            # ElevenLabs-specific initialization
+            self.tts = TTSEngine(
+                api_key=ELEVENLABS_API_KEY,
+                voice_id=ELEVENLABS_VOICE_ID,
+                out_dev_idx=output_device_idx,
+                label=f"{label}-TTS",
+                model=ELEVENLABS_MODEL,
+                on_playback_start=self._on_translation_start
+            )
+        elif USE_REALTIME_TTS:
             from tts.realtime_azure_tts import RealtimeAzureTTS as TTSEngine
             logger.info(f"{label} Using RealtimeTTS for ultra-low latency")
+            # Azure-specific initialization
+            self.tts = TTSEngine(
+                azure_key, azure_region, voice_name, output_device_idx,
+                f"{label}-TTS", SPEECH_RATE,
+                on_playback_start=self._on_translation_start
+            )
         else:
             from tts.azure_tts import FastStreamingTTS as TTSEngine
             logger.info(f"{label} Using standard Azure TTS")
+            # Azure-specific initialization
+            self.tts = TTSEngine(
+                azure_key, azure_region, voice_name, output_device_idx,
+                f"{label}-TTS", SPEECH_RATE,
+                on_playback_start=self._on_translation_start
+            )
         
         self.label = label
         self.channel = channel
@@ -90,13 +118,6 @@ class DeepLTranslator:
         self.capture_pipe = capture_pipe
         self.running = False
         self.phrase_count = 0
-        
-        # Initialize TTS (RealtimeTTS or standard Azure TTS)
-        self.tts = TTSEngine(
-            azure_key, azure_region, voice_name, output_device_idx,
-            f"{label}-TTS", SPEECH_RATE,
-            on_playback_start=self._on_translation_start
-        )
         
         # WebSocket components
         self.websocket = None
@@ -115,14 +136,11 @@ class DeepLTranslator:
         # Translation buffer for smooth TTS streaming
         self.translation_buffer = ""  # Accumulates chunks for smoother TTS output
         
-        # ⚡ ADAPTIVE BUFFER STRATEGY for low latency first chunk + fluidity
-        self.is_first_translation = True  # Track if this is first translation
-        self.min_buffer_length = 12  # Minimum characters before flushing
-        self.min_buffer_length_first = 5  # Low for first chunk (quick response!)
-        self.max_buffer_length = 40  # Maximum characters before forced flush (INCREASED for fewer, bigger chunks)
-        self.max_buffer_length_first = 18  # Reasonable size for first chunk (not too small!)
-        self.buffer_timeout = 2.0  # Seconds before forced flush
-        self.buffer_timeout_first = 1.0  # Timeout for first chunk (1 second)
+        # [FAST] UNIFORM BUFFER STRATEGY: NO special first chunk behavior
+        # Optimized for instant response on short phrases (e.g., "Sì", "Ok", "Grazie")
+        self.min_buffer_length = 0  # NO minimum! Accept any text length
+        self.max_buffer_length = 12  # Maximum before forced flush (keep reasonable)
+        self.buffer_timeout = 0.0  # Timeout for flush
         
         self.last_buffer_update_time = None  # Track when buffer was last updated
     
@@ -174,35 +192,26 @@ class DeepLTranslator:
                 return True
             return False
         
-        # ⚡ ADAPTIVE THRESHOLDS: Use lower limits for first translation (faster response!)
-        active_min_length = self.min_buffer_length_first if self.is_first_translation else self.min_buffer_length
-        active_max_length = self.max_buffer_length_first if self.is_first_translation else self.max_buffer_length
-        active_timeout = self.buffer_timeout_first if self.is_first_translation else self.buffer_timeout
-        
         # CONDITION 2: Max buffer length exceeded (safety limit)
-        if buffer_length > active_max_length:
+        if buffer_length > self.max_buffer_length:
             text_to_send = self.translation_buffer.strip()
-            mode_tag = "[FIRST-MAX]" if self.is_first_translation else "[MAX LENGTH]"
-            logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} {mode_tag}: {buffer_length} chars")
+            logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} [MAX LENGTH]: {buffer_length} chars")
             self.tts.speak(text_to_send)
             self.phrase_count += 1
             self.translation_buffer = ""
             self.last_buffer_update_time = None
-            self.is_first_translation = False  # No longer first translation
             return True
         
         # CONDITION 3: Timeout expired
-        if self.last_buffer_update_time and (current_time - self.last_buffer_update_time) > active_timeout:
+        if self.last_buffer_update_time and (current_time - self.last_buffer_update_time) > self.buffer_timeout:
             text_to_send = self.translation_buffer.strip()
             if text_to_send:
                 timeout_duration = current_time - self.last_buffer_update_time
-                mode_tag = "[FIRST-TIMEOUT]" if self.is_first_translation else "[TIMEOUT]"
-                logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} {mode_tag}: {timeout_duration:.1f}s")
+                logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} [TIMEOUT]: {timeout_duration:.1f}s")
                 self.tts.speak(text_to_send)
                 self.phrase_count += 1
                 self.translation_buffer = ""
                 self.last_buffer_update_time = None
-                self.is_first_translation = False  # No longer first translation
                 return True
         
         # CONDITION 4: Natural delimiter found (NO minimum length requirement!)
@@ -236,12 +245,10 @@ class DeepLTranslator:
             
             # Only send if there's actual text content (not just delimiters/spaces)
             if text_to_send and text_without_delimiters.strip():
-                # ⚡ Check if meets minimum length (adaptive based on first/subsequent)
-                if len(text_to_send) >= active_min_length:
-                    mode_tag = "[FIRST-DELIM]" if self.is_first_translation else "[DELIMITER]"
-                    logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} {mode_tag}: '{first_delimiter}'")
-                    self.tts.speak(text_to_send)
-                    self.is_first_translation = False  # No longer first translation
+                # [FAST] ULTRA-REACTIVE: NO minimum length check! Accept ANY text with content
+                # This allows instant response for short phrases like "Sì.", "Ok.", "Ciao!"
+                logger.info(f"{self.label} <- [{self.to_lang}] {text_to_send} [DELIMITER]: '{first_delimiter}'")
+                self.tts.speak(text_to_send)
                 self.phrase_count += 1
                 
                 # Keep remaining text in buffer (skip past the delimiter)
@@ -326,14 +333,9 @@ class DeepLTranslator:
         """
         logger.debug(f"{self.label} Periodic buffer checker started")
         try:
+
             while self.running and self.websocket:
                 await asyncio.sleep(0.5)
-                
-                # ⚡ Reset first translation flag if buffer has been empty for a while (new conversation)
-                if not self.translation_buffer and not self.is_first_translation:
-                    # Buffer empty - next translation will be "first" again
-                    logger.debug(f"{self.label} 🔄 Buffer empty - resetting first translation flag for next conversation")
-                    self.is_first_translation = True
                 
                 # Check if buffer has timed out
                 if self.translation_buffer and self.last_buffer_update_time:
@@ -342,7 +344,7 @@ class DeepLTranslator:
                     
                     if time_since_update > self.buffer_timeout:
                         logger.debug(
-                            f"{self.label} 🔔 Periodic timeout triggered "
+                            f"{self.label} [NOTIFY] Periodic timeout triggered "
                             f"(buffer age: {time_since_update:.1f}s, threshold: {self.buffer_timeout}s)"
                         )
                         self._flush_translation_buffer(force=False)
@@ -750,6 +752,12 @@ class DeepLTranslator:
             
             # Start WebSocket thread with asyncio loop
             def run_async_loop():
+                """
+                Create and run asyncio event loop for WebSocket management.
+                
+                Sets up a new event loop in the current thread and runs the
+                WebSocket connection until completion or error.
+                """
                 self.loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(self.loop)
                 try:

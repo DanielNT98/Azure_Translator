@@ -19,10 +19,18 @@ class TurnState(Enum):
     """
     Enumeration of possible conversation turn states.
     
+    Defines the three possible states in a bidirectional conversation:
+    one party speaking, the other party speaking, or silence.
+    
     Attributes:
-        A: Party A has the speaking turn
-        B: Party B has the speaking turn  
-        IDLE: No one is speaking
+        A (str): Party A has the speaking turn
+        B (str): Party B has the speaking turn  
+        IDLE (str): No one is speaking (silence)
+        
+    Example:
+        >>> state = TurnState.A
+        >>> print(f"Current turn: {state.value}")
+        Current turn: A
     """
     A = "A"
     B = "B"

@@ -1,0 +1,68 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-15 15:30:37
+📄 Log file: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251015_153018.log
+
+================================================================================
+📈 STATISTICHE PER SESSIONE
+================================================================================
+
+🔹 Sessione #1
+   Inizio: 15:30:19
+   Fine:   None
+
+🔹 Sessione #2
+   Inizio: 15:30:19
+   Fine:   ongoing
+   Traduzioni: 28
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: DOWN]                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TRANSLATION RECEIVED (Tempo da speech start a traduzione ricevuta)
+    📊 Campioni:   28
+    📈 Media:        1236.7 ms
+    📉 Mediana:      1118.8 ms
+    ⬇️  Minimo:        216.6 ms
+    ⬆️  Massimo:      3118.8 ms
+    📊 Dev.Std:       771.8 ms
+    🎯 P95:          2686.7 ms
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: DOWN]-TTS-TTS                                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TTS RECEIVED TEXT (Overhead locale: traduzione → TTS)
+    📊 Campioni:   9
+    📈 Media:           1.1 ms
+    📉 Mediana:         0.6 ms
+    ⬇️  Minimo:          0.5 ms
+    ⬆️  Massimo:         4.6 ms
+    📊 Dev.Std:         1.3 ms
+    🎯 P95:             4.6 ms
+    ✅ Ottimo: Overhead locale minimo
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+⚠️  DOWN]:TRANSLATION RECEIVED: Max (3118.8ms) >> Media (1236.7ms) - Variabilità alta
+⚠️  DOWN]-TTS-TTS:TTS RECEIVED TEXT: Max (4.6ms) >> Media (1.1ms) - Variabilità alta
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+🟡 WARNING: Variabilità alta nella traduzione. Connessione instabile?
+
+================================================================================
+📄 Report salvato: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251015_153018_timing_report.txt
+================================================================================

@@ -1,0 +1,54 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-16 17:17:16
+📄 Log file: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251016_171608.log
+
+================================================================================
+📈 STATISTICHE PER SESSIONE
+================================================================================
+
+🔹 Sessione #1
+   Inizio: 17:16:10
+   Fine:   None
+
+🔹 Sessione #2
+   Inizio: 17:16:10
+   Fine:   ongoing
+   Traduzioni: 18
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TRANSLATION RECEIVED (Tempo da speech start a traduzione ricevuta)
+    📊 Campioni:   18
+    📈 Media:        2847.6 ms
+    📉 Mediana:      2070.6 ms
+    ⬇️  Minimo:         71.6 ms
+    ⬆️  Massimo:      6612.8 ms
+    📊 Dev.Std:      2201.1 ms
+    🎯 P95:          6612.8 ms
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+⚠️  UP]:TRANSLATION RECEIVED: Media 2847.6ms > 1500ms (target)
+⚠️  UP]:TRANSLATION RECEIVED: Max (6612.8ms) >> Media (2847.6ms) - Variabilità alta
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+🔴 CRITICO: Latenza traduzione molto alta (>2s). Verifica connessione DeepL.
+🟡 WARNING: Variabilità alta nella traduzione. Connessione instabile?
+
+================================================================================
+📄 Report salvato: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251016_171608_timing_report.txt
+================================================================================

@@ -61,6 +61,6 @@ if input_devices:
         default_note = " # <-- System default" if idx == default_in else ""
         print(f'  MIC_DEVICE_NAME="{name}"{default_note}')
 else:
-    print("\n⚠️  No input devices found!")
+    print("\n[Warning] No input devices found!")
 
 print("\n" + "=" * 80)

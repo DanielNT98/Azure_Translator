@@ -79,21 +79,16 @@ class RealtimeAzureTTS:
             self.on_playback_start = on_playback_start
             
             # RealtimeTTS performance tuning parameters
-            #LOW LATENCY + HIGH FLUIDITY MODE: Optimized for fast start, smooth continuation
-            self.buffer_threshold = 0.0  # ZERO buffer for instant start (first chunk)
-            self.buffer_threshold_later = 0.2  # 200ms buffer for subsequent chunks (smoother)
-            self.min_sentence_length = 0  # No minimum - accept any fragment size
-            self.min_first_fragment_length = 0  # Start as fast as possible
-            self.context_size = 30  # Extended context for better phrasing
-            self.force_first_fragment_after_words = 15 # Force earlier fragments
+            # UNIFORM MODE: Same behavior for all chunks (no special first chunk)
+            self.buffer_threshold = 0.00  # 100ms buffer for all chunks
+            self.min_sentence_length = 0  # No minimum - accept any fragment size (even 1 word!)
+            self.min_first_fragment_length = 0  # Start immediately, no wait!
+            self.context_size = 20  # Reduced context for faster processing
+            self.force_first_fragment_after_words = 8  # Force very early (after just 10 words!)S
             
             # Pre-buffering and lookahead settings
-            self.pre_buffer_ms = 0  # NO pre-buffer for first chunk (instant start!)
-            self.pre_buffer_ms_later = 80  # 80ms pre-buffer for subsequent chunks (batching)
-            self.lookahead_cycles = 8  # Wait up to 400ms for more chunks when idle
-            
-            # State tracking for adaptive behavior
-            self.is_first_chunk = True  # Track if this is the first chunk of a session
+            self.pre_buffer_ms = 20  # 50ms pre-buffer for all chunks
+            self.lookahead_cycles = 5  # 250ms lookahead timeout
             
             # Convert speech_rate from SSML format (+40%) to float (0.4)
             rate_value = 0.0
@@ -123,7 +118,7 @@ class RealtimeAzureTTS:
                 on_audio_stream_stop=self._on_stream_stop,
                 output_device_index=out_dev_idx,
                 muted=False,  # Let RealtimeTTS handle playback directly
-                language='it',  # Default language for sentence splitting
+                language='en',  # Default language for sentence splitting
                 tokenizer='nltk',  # Use NLTK for fast sentence splitting
                 level=30,  # WARNING level logging (less verbose)
             )
@@ -220,17 +215,9 @@ class RealtimeAzureTTS:
                 if not self.generator_active.wait(timeout=0.1):
                     continue
                 
-                # ⚡ ADAPTIVE PRE-BUFFERING: 
-                # - First chunk: NO pre-buffer (instant start for low latency!)
-                # - Subsequent chunks: Pre-buffer for batching (smooth continuation)
-                if self.is_first_chunk:
-                    # First chunk - yield immediately for minimum latency!
-                    logger.debug(f"{self.label} First chunk - skipping pre-buffer for instant start")
-                    self.is_first_chunk = False
-                else:
-                    # Subsequent chunks - pre-buffer for smoother batching
-                    if self.pre_buffer_ms_later > 0:
-                        time.sleep(self.pre_buffer_ms_later / 1000.0)
+                # [FAST] UNIFORM PRE-BUFFERING: Same for all chunks
+                if self.pre_buffer_ms > 0:
+                    time.sleep(self.pre_buffer_ms / 1000.0)
                 
                 chunks_yielded = 0
                 idle_cycles = 0
@@ -261,37 +248,42 @@ class RealtimeAzureTTS:
                     
                     # If we got chunks, prepare to yield them
                     if chunk_batch:
-                        # BATCHING STRATEGY for smoother playback:
-                        # Wait for at least 2 chunks UNLESS:
-                        # - It's the first batch (need instant response!)
-                        # - We've waited too long already (timeout)
-                        # - Queue is clearly empty and not receiving more
+                        # [FAST] ULTRA-REACTIVE BATCHING STRATEGY:
+                        # - First batch: INSTANT yield (no wait at all!)
+                        # - Short text (<15 chars): INSTANT yield (e.g., "Sì", "Ok", "Ciao")
+                        # - Otherwise: Brief wait for batching UNLESS timeout
                         
                         is_first_batch = (chunks_yielded == 0)
+                        total_chars = sum(len(t) for t in chunk_batch)
+                        is_short_text = (total_chars < 15)  # Short phrases yield immediately
                         has_enough_chunks = (len(chunk_batch) >= 2)
-                        waited_too_long = (idle_cycles >= 3)  # 150ms total wait (3 × 50ms)
+                        waited_too_long = (idle_cycles >= 2)  # Reduced to 100ms (was 150ms)
                         
-                        # If we should wait for more chunks
-                        if not is_first_batch and not has_enough_chunks and not waited_too_long:
+                        # INSTANT yield conditions (no wait):
+                        if is_first_batch or is_short_text or waited_too_long:
+                            # Yield immediately for maximum reactivity!
+                            pass  # Skip to yield below
+                        # Otherwise, try to wait for more chunks (batching for longer texts)
+                        elif not has_enough_chunks:
                             # Check if more data is coming
                             if not self.text_queue.empty():
                                 # Data in queue, collect more
                                 time.sleep(0.01)
                                 continue
                             else:
-                                # Queue empty, but wait briefly in case more is coming
+                                # Queue empty, but wait briefly (only for longer texts)
                                 time.sleep(0.01)
                                 idle_cycles += 1
                                 continue
                         
-                        # 🔗 Smart concatenation: Join multiple chunks with space
+                        # Smart concatenation: Join multiple chunks with space
                         if len(chunk_batch) > 1:
                             combined_text = " ".join(chunk_batch)
-                            logger.info(f"{self.label} 🎯 Yielding BATCH ({len(chunk_batch)} chunks): '{combined_text[:60]}...'")
+                            logger.info(f"{self.label} Yielding BATCH ({len(chunk_batch)} chunks): '{combined_text[:60]}...'")
                             yield combined_text
                             chunks_yielded += len(chunk_batch)
                         else:
-                            logger.info(f"{self.label} 🎯 Yielding: '{chunk_batch[0][:50]}...'")
+                            logger.info(f"{self.label} Yielding: '{chunk_batch[0][:50]}...'")
                             yield chunk_batch[0]
                             chunks_yielded += 1
                     else:
@@ -331,10 +323,7 @@ class RealtimeAzureTTS:
                 if not self.generator_active.wait(timeout=1.0):
                     continue
                 
-                logger.info(f"{self.label} ⚡ Starting continuous playback session")
-                
-                # Reset first chunk flag for this session (for adaptive behavior)
-                self.is_first_chunk = True
+                logger.info(f"{self.label} [FAST] Starting continuous playback session")
                 
                 # Record start time for timing
                 session_start = time.time()
@@ -344,7 +333,7 @@ class RealtimeAzureTTS:
                     # This eliminates gaps between chunks!
                     self.stream.feed(self._text_generator())
                     self.stream.play(
-                        # ⚡ SEAMLESS MODE: Optimized for continuous streaming with smooth transitions
+                        # [FAST] SEAMLESS MODE: Optimized for continuous streaming with smooth transitions
                         fast_sentence_fragment=True,
                         fast_sentence_fragment_allsentences=True,
                         fast_sentence_fragment_allsentences_multiple=True,
@@ -362,7 +351,7 @@ class RealtimeAzureTTS:
                     
                     # Log session completion
                     session_duration = (time.time() - session_start) * 1000
-                    logger.info(f"{self.label} 🏁 Playback session complete: {session_duration:.1f}ms")
+                    logger.info(f"{self.label} [DONE] Playback session complete: {session_duration:.1f}ms")
                     
                 except Exception as e:
                     logger.error(f"{self.label} Continuous playback error: {e}")

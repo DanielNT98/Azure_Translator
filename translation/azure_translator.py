@@ -18,7 +18,22 @@ log = logging.getLogger(__name__)
 class AzureTranslator:
     """
     Azure-based translator using Speech Translation API.
-    Handles continuous recognition with partial and final results.
+    
+    Handles continuous speech recognition and translation with partial and 
+    final results. Integrates with BalancedChunker for intelligent text 
+    segmentation and TTS for audio output.
+    
+    Attributes:
+        label (str): Label for logging identification
+        channel (str): Channel identifier ("A" or "B")
+        turn_manager (TurnManager, optional): Turn management for priority control
+        capture_pipe (CapturePipe, optional): Audio capture pipe reference
+        tts: TTS engine instance for speech synthesis
+        running (bool): Translation service running state
+        phrase_count (int): Number of translated phrases
+        config: Azure Speech Translation configuration
+        translator: Azure TranslationRecognizer instance
+        chunker (BalancedChunker): Text chunker for partial results
     """
     
     def __init__(

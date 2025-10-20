@@ -18,11 +18,20 @@ class AudioDevices:
     """
     Container for audio device indices.
     
+    Dataclass that holds the indices of all audio devices used by the 
+    translation system. Each index corresponds to a sounddevice/PyAudio 
+    device number.
+    
     Attributes:
         mic_idx (int or None): Microphone input device index
-        a_play_idx (int or None): Output device A (playback) index
-        b_cap_idx (int or None): Input device B (capture) index  
-        hp_play_idx (int or None): Headphones output device index
+        a_play_idx (int or None): Output device A (playback) index for TTS
+        b_cap_idx (int or None): Input device B (capture) index for loopback
+        hp_play_idx (int or None): Headphones output device index for monitoring
+        
+    Example:
+        >>> devices = AudioDevices(mic_idx=1, a_play_idx=5, b_cap_idx=6, hp_play_idx=2)
+        >>> print(f"Microphone: {devices.mic_idx}")
+        Microphone: 1
     """
     mic_idx: int | None
     a_play_idx: int | None

@@ -15,6 +15,52 @@ from datetime import datetime
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# =============================================================================
+# CRITICAL: Patch PyAudio BEFORE any imports that might use RealtimeTTS
+# =============================================================================
+def _patch_pyaudio_early():
+    """
+    Patch PyAudio.open() at the earliest possible moment to force device routing.
+    This MUST happen before RealtimeTTS is imported anywhere in the codebase.
+    """
+    try:
+        import pyaudio
+        import logging
+        logger = logging.getLogger("translator_bridge")
+        
+        original_open = pyaudio.PyAudio.open
+        _forced_device = None
+        
+        def patched_open(self, *args, **kwargs):
+            nonlocal _forced_device
+            
+            # Get device from environment variable set later
+            if _forced_device is None:
+                _forced_device = os.environ.get('_PYAUDIO_FORCE_DEVICE')
+                if _forced_device:
+                    _forced_device = int(_forced_device)
+                    logger.info(f"[PyAudio Early Patch] Device index from env: {_forced_device}")
+            
+            if _forced_device is not None and (kwargs.get('output', False) or 
+                (not kwargs.get('input', False) and not kwargs.get('output', False))):
+                old_device = kwargs.get('output_device_index', 'default')
+                kwargs['output_device_index'] = _forced_device
+                logger.info(f"[PyAudio Early Patch] Redirecting audio: {old_device} -> {_forced_device}")
+            
+            return original_open(self, *args, **kwargs)
+        
+        pyaudio.PyAudio.open = patched_open
+        print("[OK] PyAudio early-patched for device routing")
+        
+    except ImportError:
+        print("[Warning] PyAudio not installed, device routing unavailable")
+    except Exception as e:
+        print(f"[Warning] Failed to patch PyAudio: {e}")
+
+# Apply the patch NOW, before any other imports
+_patch_pyaudio_early()
+# =============================================================================
+
 # Import configuration
 from config import settings
 
@@ -27,13 +73,17 @@ from translation import DeepLTranslator
 # Import audio components
 from audio import CapturePipe
 
-# Import TTS (RealtimeTTS or standard Azure TTS based on config)
-if settings.USE_REALTIME_TTS:
+# Import TTS (priority: ElevenLabs > RealtimeTTS > standard Azure TTS)
+if getattr(settings, 'USE_ELEVENLABS_TTS', False):
+    # Experimental direct ElevenLabs TTS integration
+    from tts.elevenlabs_tts import ElevenLabsTTS as TTSEngine
+    print("[TTS] Using ElevenLabs TTS (EXPERIMENTAL)")
+elif settings.USE_REALTIME_TTS:
     from tts.realtime_azure_tts import RealtimeAzureTTS as TTSEngine
-    print("🚀 Using RealtimeTTS for ultra-low latency")
+    print("[TTS] Using RealtimeTTS for ultra-low latency")
 else:
     from tts.azure_tts import FastStreamingTTS as TTSEngine
-    print("📢 Using standard Azure TTS")
+    print("[TTS] Using standard Azure TTS")
 
 # Import utilities
 from utils import setup_logging
@@ -104,6 +154,11 @@ def main():
         if devices.a_play_idx is None or devices.b_cap_idx is None or devices.mic_idx is None:
             logger.error("FAILED: Critical devices not resolved")
             return
+        
+        # Set PyAudio device routing via environment variable (for early patch)
+        if devices.a_play_idx is not None:
+            os.environ['_PYAUDIO_FORCE_DEVICE'] = str(devices.a_play_idx)
+            logger.info(f"[Config] Set PyAudio force device: {devices.a_play_idx} (Cable-A Input)")
         
         # Create turn manager for channel priority management (optional)
         from core.turn_manager import TurnManager

@@ -9,8 +9,11 @@ import os
 from dotenv import load_dotenv
 
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the project .env file reliably
+# Resolve project root as the parent directory of this settings.py file
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
+load_dotenv(dotenv_path=ENV_PATH)
 
 
 def get_env(name, default=None):
@@ -38,7 +41,7 @@ DEEPL_API_URL = get_env("DEEPL_API_URL", "https://api.deepl.com/v1/voice/realtim
 
 # Language Configuration
 SRC_LANG = get_env("SRC_LANG", "it")  # DeepL uses "it" not "it-IT"
-TGT_LANG_UP = get_env("TGT_LANG_UP", "it")
+TGT_LANG_UP = get_env("TGT_LANG_UP", "en")
 DOWN_SRC_LANG = get_env("DOWN_SRC_LANG", "en")
 TGT_LANG_DOWN = get_env("TGT_LANG_DOWN", "it")
 
@@ -72,9 +75,15 @@ SUBSEQUENT_STABILITY_MS = int(get_env("SUBSEQUENT_STABILITY_MS", "500"))
 SPEECH_RATE = get_env("SPEECH_RATE", "+50%")
 USE_REALTIME_TTS = get_env("USE_REALTIME_TTS", "1") == "1"  # Use RealtimeTTS for ultra-low latency
 
+# ElevenLabs TTS Configuration (EXPERIMENTAL)
+USE_ELEVENLABS_TTS = get_env("USE_ELEVENLABS_TTS", "1") == "1"  # Use ElevenLabs instead of Azure (test only)
+ELEVENLABS_API_KEY = get_env("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_ID = get_env("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Rachel (default)
+ELEVENLABS_MODEL = get_env("ELEVENLABS_MODEL", "eleven_turbo_v2_5")  # Fast model for real-time
+
 # Audio Pass-through Configuration
 ENABLE_PASSTHROUGH_UP = get_env("ENABLE_PASSTHROUGH_UP", "1") == "1"
-PASSTHROUGH_VOLUME_UP = float(get_env("PASSTHROUGH_VOLUME_UP", "0.05"))
+PASSTHROUGH_VOLUME_UP = float(get_env("PASSTHROUGH_VOLUME_UP", "0.10"))
 ENABLE_PASSTHROUGH_DOWN = get_env("ENABLE_PASSTHROUGH_DOWN", "1") == "1"
 PASSTHROUGH_VOLUME_DOWN = float(get_env("PASSTHROUGH_VOLUME_DOWN", "0.05"))
 TRANSLATION_VOLUME = float(get_env("TRANSLATION_VOLUME", "1.0"))

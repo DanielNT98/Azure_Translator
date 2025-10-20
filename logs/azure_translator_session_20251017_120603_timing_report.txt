@@ -1,0 +1,60 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-17 12:09:47
+📄 Log file: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251017_120603.log
+
+================================================================================
+📈 STATISTICHE PER SESSIONE
+================================================================================
+
+🔹 Sessione #1
+   Inizio: 12:06:04
+   Fine:   None
+
+🔹 Sessione #2
+   Inizio: 12:06:04
+   Fine:   ongoing
+   Traduzioni: 17
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TRANSLATION RECEIVED (Tempo da speech start a traduzione ricevuta)
+    📊 Campioni:   17
+    📈 Media:        2042.1 ms
+    📉 Mediana:      1972.6 ms
+    ⬇️  Minimo:        285.3 ms
+    ⬆️  Massimo:      5577.0 ms
+    📊 Dev.Std:      1276.9 ms
+    🎯 P95:          5577.0 ms
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: [UP]-TTS-TTS                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+⚠️  UP]:TRANSLATION RECEIVED: Media 2042.1ms > 1500ms (target)
+⚠️  UP]:TRANSLATION RECEIVED: Max (5577.0ms) >> Media (2042.1ms) - Variabilità alta
+⚠️  [UP]-TTS-TTS:TTS SYNTHESIS START: Max (4006.5ms) >> Media (1123.4ms) - Variabilità alta
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+🔴 CRITICO: Latenza traduzione molto alta (>2s). Verifica connessione DeepL.
+🟡 WARNING: Variabilità alta nella traduzione. Connessione instabile?
+
+================================================================================
+📄 Report salvato: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251017_120603_timing_report.txt
+================================================================================

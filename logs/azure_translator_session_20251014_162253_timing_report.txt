@@ -1,0 +1,104 @@
+================================================================================
+📊 TIMING ANALYSIS REPORT - Azure Translator with DeepL
+================================================================================
+📅 Report generato: 2025-10-14 16:26:54
+📄 Log file: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251014_162253.log
+
+================================================================================
+📈 STATISTICHE PER SESSIONE
+================================================================================
+
+🔹 Sessione #1
+   Inizio: 16:22:54
+   Fine:   None
+
+🔹 Sessione #2
+   Inizio: 16:22:54
+   Fine:   ongoing
+   Traduzioni: 292
+
+================================================================================
+📊 STATISTICHE GLOBALI PER FASE
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: DOWN]                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TRANSLATION RECEIVED (Tempo da speech start a traduzione ricevuta)
+    📊 Campioni:   130
+    📈 Media:        2051.2 ms
+    📉 Mediana:      1956.6 ms
+    ⬇️  Minimo:         81.3 ms
+    ⬆️  Massimo:      4911.3 ms
+    📊 Dev.Std:      1102.9 ms
+    🎯 P95:          3847.5 ms
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: DOWN]-TTS-TTS                                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TTS RECEIVED TEXT (Overhead locale: traduzione → TTS)
+    📊 Campioni:   44
+    📈 Media:         147.5 ms
+    📉 Mediana:         0.8 ms
+    ⬇️  Minimo:          0.4 ms
+    ⬆️  Massimo:      2330.7 ms
+    📊 Dev.Std:       549.5 ms
+    🎯 P95:          2045.3 ms
+    ❌ Problematico: Overhead eccessivo
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]                                                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TRANSLATION RECEIVED (Tempo da speech start a traduzione ricevuta)
+    📊 Campioni:   162
+    📈 Media:        2264.9 ms
+    📉 Mediana:      2381.1 ms
+    ⬇️  Minimo:         20.6 ms
+    ⬆️  Massimo:      4666.1 ms
+    📊 Dev.Std:      1207.0 ms
+    🎯 P95:          4149.9 ms
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📡 CANALE: UP]-TTS-TTS                                                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  TTS RECEIVED TEXT (Overhead locale: traduzione → TTS)
+    📊 Campioni:   45
+    📈 Media:         208.9 ms
+    📉 Mediana:         0.8 ms
+    ⬇️  Minimo:          0.5 ms
+    ⬆️  Massimo:      2386.0 ms
+    📊 Dev.Std:       673.6 ms
+    🎯 P95:          2339.0 ms
+    ❌ Problematico: Overhead eccessivo
+
+
+================================================================================
+🔍 ANALISI BOTTLENECK
+================================================================================
+
+⚠️  UP]:TRANSLATION RECEIVED: Media 2264.9ms > 1500ms (target)
+⚠️  UP]:TRANSLATION RECEIVED: Max (4666.1ms) >> Media (2264.9ms) - Variabilità alta
+⚠️  UP]-TTS-TTS:TTS RECEIVED TEXT: Max (2386.0ms) >> Media (208.9ms) - Variabilità alta
+⚠️  DOWN]:TRANSLATION RECEIVED: Media 2051.2ms > 1500ms (target)
+⚠️  DOWN]:TRANSLATION RECEIVED: Max (4911.3ms) >> Media (2051.2ms) - Variabilità alta
+⚠️  DOWN]-TTS-TTS:TTS RECEIVED TEXT: Max (2330.7ms) >> Media (147.5ms) - Variabilità alta
+
+================================================================================
+💡 RACCOMANDAZIONI
+================================================================================
+
+🔴 CRITICO: Latenza traduzione molto alta (>2s). Verifica connessione DeepL.
+🟡 WARNING: Variabilità alta nella traduzione. Connessione instabile?
+🔴 CRITICO: Latenza traduzione molto alta (>2s). Verifica connessione DeepL.
+🟡 WARNING: Variabilità alta nella traduzione. Connessione instabile?
+
+================================================================================
+📄 Report salvato: C:\Users\notaristefano.21\Desktop\Azure__Transaltor\logs\azure_translator_session_20251014_162253_timing_report.txt
+================================================================================

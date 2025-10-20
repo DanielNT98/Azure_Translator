@@ -2,24 +2,24 @@
 
 ## Overview
 
-Il modulo `tts/realtime_azure_tts.py` fornisce un'alternativa ultra-low-latency al TTS Azure standard usando la libreria [RealtimeTTS](https://github.com/KoljaB/RealtimeTTS).
+The `tts/realtime_azure_tts.py` module provides an ultra-low-latency alternative to standard Azure TTS using the [RealtimeTTS](https://github.com/KoljaB/RealtimeTTS) library.
 
-## Vantaggi di RealtimeTTS
+## RealtimeTTS Advantages
 
 ### 🚀 Performance
-- **Latenza inferiore**: Prima audio chunk in <200ms vs ~500ms del TTS standard
-- **Streaming real-time**: Inizia a parlare prima che la sintesi sia completa
-- **Chunking intelligente**: Divide il testo in frasi per streaming progressivo
+- **Lower latency**: First audio chunk in <200ms vs ~500ms of standard TTS
+- **Real-time streaming**: Starts speaking before synthesis is complete
+- **Intelligent chunking**: Splits text into sentences for progressive streaming
 
-### ✨ Qualità
-- **Stessa qualità Azure**: Usa le stesse voci neurali Azure
-- **Nessuna perdita**: Audio identico al TTS standard
-- **Supporto SSML**: Controllo completo su velocità, pitch, ecc.
+### ✨ Quality
+- **Same Azure quality**: Uses the same Azure neural voices
+- **No loss**: Audio identical to standard TTS
+- **SSML support**: Complete control over speed, pitch, etc.
 
-### 🎯 Compatibilità
-- **Drop-in replacement**: Stessa interfaccia del `FastStreamingTTS`
-- **Nessun cambio codice**: Sostituisci solo l'import
-- **Tutti i parametri**: Supporta voice_name, speech_rate, device_idx, ecc.
+### 🎯 Compatibility
+- **Drop-in replacement**: Same interface as `FastStreamingTTS`
+- **No code changes**: Just replace the import
+- **All parameters**: Supports voice_name, speech_rate, device_idx, etc.
 
 ---
 
@@ -29,38 +29,38 @@ Il modulo `tts/realtime_azure_tts.py` fornisce un'alternativa ultra-low-latency 
 pip install RealtimeTTS
 ```
 
-Già installato nel tuo environment! ✅
+Already installed in your environment! ✅
 
 ---
 
 ## Usage
 
-### Opzione 1: Modifica diretta in `main_deepl.py`
+### Option 1: Direct modification in `main_deepl.py`
 
-**PRIMA:**
+**BEFORE:**
 ```python
 from tts.azure_tts import FastStreamingTTS
 ```
 
-**DOPO:**
+**AFTER:**
 ```python
 from tts.realtime_azure_tts import RealtimeAzureTTS as FastStreamingTTS
 ```
 
-Tutto il resto del codice rimane identico!
+All the rest of the code remains identical!
 
 ---
 
-### Opzione 2: Configurazione dinamica
+### Option 2: Dynamic configuration
 
-Aggiungi in `config/settings.py`:
+Add in `config/settings.py`:
 
 ```python
 # TTS Engine Selection
 USE_REALTIME_TTS = get_env("USE_REALTIME_TTS", "1") == "1"
 ```
 
-Poi in `main_deepl.py`:
+Then in `main_deepl.py`:
 
 ```python
 from config.settings import USE_REALTIME_TTS
@@ -70,7 +70,7 @@ if USE_REALTIME_TTS:
 else:
     from tts.azure_tts import FastStreamingTTS as TTS
 
-# Usa TTS normalmente
+# Use TTS normally
 self.tts = TTS(azure_key, azure_region, voice_name, ...)
 ```
 
@@ -99,54 +99,54 @@ RealtimeAzureTTS(
 #### Methods
 
 ```python
-# Sintetizza e riproduce testo (deduplicazione automatica)
+# Synthesize and play text (automatic deduplication)
 speak(text: str) -> bool
 
-# Ferma playback corrente
+# Stop current playback
 stop_playback() -> None
 
-# Pulisce coda di sintesi
+# Clear synthesis queue
 clear_queue() -> None
 
-# Shutdown completo
+# Complete shutdown
 shutdown() -> None
 ```
 
 #### Attributes
 
 ```python
-last_translation_time: float  # Per timing logs
-last_tts_received_time: float # Per timing logs
-is_playing: bool              # Stato playback
+last_translation_time: float  # For timing logs
+last_tts_received_time: float # For timing logs
+is_playing: bool              # Playback state
 ```
 
 ---
 
 ## Configuration Examples
 
-### Esempio 1: Latenza Minima Assoluta
+### Example 1: Absolute Minimum Latency
 
 ```python
 tts = RealtimeAzureTTS(
     speech_key=AZURE_KEY,
     region=AZURE_REGION,
-    voice_name="en-US-AndrewMultilingualNeural",  # Voce veloce
+    voice_name="en-US-AndrewMultilingualNeural",  # Fast voice
     out_dev_idx=output_device,
     label="UP-TTS",
-    speech_rate="+45%",  # Velocità massima senza distorsione
+    speech_rate="+45%",  # Maximum speed without distortion
 )
 ```
 
-### Esempio 2: Bilanciato Qualità/Velocità
+### Example 2: Balanced Quality/Speed
 
 ```python
 tts = RealtimeAzureTTS(
     speech_key=AZURE_KEY,
     region=AZURE_REGION,
-    voice_name="en-US-BrianMultilingualNeural",  # Più naturale
+    voice_name="en-US-BrianMultilingualNeural",  # More natural
     out_dev_idx=output_device,
     label="DOWN-TTS",
-    speech_rate="+35%",  # Velocità moderata
+    speech_rate="+35%",  # Moderate speed
 )
 ```
 
@@ -166,13 +166,13 @@ Translation received → [150ms] → First audio chunk → [50ms] → Playback s
 Total latency: ~200ms
 ```
 
-**Miglioramento: 3.5x più veloce! 🚀**
+**Improvement: 3.5x faster! 🚀**
 
 ---
 
 ## Logging Output
 
-RealtimeTTS genera log dettagliati per il timing:
+RealtimeTTS generates detailed timing logs:
 
 ```
 [INFO] [UP-TTS] TTS RECEIVED TEXT | Delay: 1.2ms | Text: 'Hello everyone'
@@ -186,35 +186,35 @@ RealtimeTTS genera log dettagliati per il timing:
 
 ## Troubleshooting
 
-### Problema: "Import RealtimeTTS could not be resolved"
+### Problem: "Import RealtimeTTS could not be resolved"
 
-**Causa**: Libreria non installata o environment sbagliato
+**Cause**: Library not installed or wrong environment
 
-**Soluzione**:
+**Solution**:
 ```bash
 pip install RealtimeTTS
 ```
 
-### Problema: Audio distorto o troppo veloce
+### Problem: Distorted or too fast audio
 
-**Causa**: speech_rate troppo alto
+**Cause**: speech_rate too high
 
-**Soluzione**: Riduci a `+35%` o `+30%`
+**Solution**: Reduce to `+35%` or `+30%`
 
-### Problema: Latenza ancora alta
+### Problem: Still high latency
 
-**Causa**: Device audio lento o buffer troppo grandi
+**Cause**: Slow audio device or buffers too large
 
-**Soluzione**: 
-1. Verifica `buffer_threshold_seconds=0.1` nel costructor
-2. Usa device audio con latenza bassa
-3. Verifica che `muted=True` (no doppio playback)
+**Solution**: 
+1. Verify `buffer_threshold_seconds=0.1` in constructor
+2. Use audio device with low latency
+3. Verify that `muted=True` (no double playback)
 
-### Problema: Audio si interrompe o fa scatti
+### Problem: Audio interrupts or stutters
 
-**Causa**: Buffer troppo piccolo per la velocità di rete
+**Cause**: Buffer too small for network speed
 
-**Soluzione**: Aumenta `buffer_threshold_seconds` a `0.2` o `0.3`
+**Solution**: Increase `buffer_threshold_seconds` to `0.2` or `0.3`
 
 ---
 
@@ -222,23 +222,23 @@ pip install RealtimeTTS
 
 ### Custom Streaming Settings
 
-Se vuoi modificare il comportamento dello streaming, modifica in `__init__`:
+If you want to modify the streaming behavior, edit in `__init__`:
 
 ```python
 self.stream = TextToAudioStream(
     engine=self.engine,
     on_audio_stream_start=self._on_stream_start,
     on_audio_stream_stop=self._on_stream_stop,
-    buffer_threshold_seconds=0.1,  # ⬅️ Modifica questo per buffer size
-    minimum_sentence_length=10,     # ⬅️ Lunghezza minima frase per streaming
-    minimum_first_fragment_length=5, # ⬅️ Lunghezza minima primo chunk
+    buffer_threshold_seconds=0.1,  # ⬅️ Modify this for buffer size
+    minimum_sentence_length=10,     # ⬅️ Minimum sentence length for streaming
+    minimum_first_fragment_length=5, # ⬅️ Minimum first chunk length
     muted=True,
 )
 ```
 
 ### Custom SSML
 
-Modifica `_create_ssml()` per aggiungere effetti:
+Modify `_create_ssml()` to add effects:
 
 ```python
 def _create_ssml(self, text):
@@ -256,50 +256,50 @@ def _create_ssml(self, text):
 
 ## Migration Checklist
 
-- [ ] Installa RealtimeTTS: `pip install RealtimeTTS`
-- [ ] Sostituisci import in `main_deepl.py` (o `main_azure.py`)
-- [ ] Testa con frasi brevi
-- [ ] Verifica timing logs per latenza
-- [ ] Regola `speech_rate` se necessario
-- [ ] Testa con conversazioni lunghe
-- [ ] Monitora uso CPU/memoria
-- [ ] Commit e push su repository
+- [ ] Install RealtimeTTS: `pip install RealtimeTTS`
+- [ ] Replace import in `main_deepl.py` (or `main_azure.py`)
+- [ ] Test with short phrases
+- [ ] Verify timing logs for latency
+- [ ] Adjust `speech_rate` if necessary
+- [ ] Test with long conversations
+- [ ] Monitor CPU/memory usage
+- [ ] Commit and push to repository
 
 ---
 
 ## Notes
 
-- ✅ **Compatibile 100%** con il tuo codice esistente
-- ✅ **Stesso formato audio**: 16kHz, 16-bit, mono PCM
-- ✅ **Stesse voci Azure**: Supporta tutte le neural voices
-- ✅ **Thread-safe**: Usa queue e lock come il TTS standard
-- ✅ **Deduplicazione**: Skip automatico di testi identici
-- ⚠️ **Richiede PyAudio**: Installato automaticamente con RealtimeTTS
-- ⚠️ **Latenza variabile**: Dipende da rete Azure e device audio
+- ✅ **100% compatible** with your existing code
+- ✅ **Same audio format**: 16kHz, 16-bit, mono PCM
+- ✅ **Same Azure voices**: Supports all neural voices
+- ✅ **Thread-safe**: Uses queues and locks like standard TTS
+- ✅ **Deduplication**: Automatic skip of identical texts
+- ⚠️ **Requires PyAudio**: Installed automatically with RealtimeTTS
+- ⚠️ **Variable latency**: Depends on Azure network and audio device
 
 ---
 
 ## Support
 
-Per problemi con RealtimeTTS:
+For RealtimeTTS issues:
 - GitHub Issues: https://github.com/KoljaB/RealtimeTTS/issues
 - Documentation: https://github.com/KoljaB/RealtimeTTS/wiki
 
-Per problemi con l'integrazione:
-- Controlla logs con livello DEBUG
-- Verifica configurazione Azure (key, region, voice)
-- Testa con TTS standard per confronto
+For integration issues:
+- Check logs with DEBUG level
+- Verify Azure configuration (key, region, voice)
+- Test with standard TTS for comparison
 
 ---
 
 ## Future Improvements
 
-Possibili ottimizzazioni future:
+Possible future optimizations:
 
-1. **Voice Cloning**: RealtimeTTS supporta Coqui TTS per voci custom
-2. **Local TTS**: Opzione offline con Piper TTS (zero latency di rete)
-3. **Adaptive Buffering**: Regolazione automatica buffer in base a latenza rete
-4. **Multi-Engine Fallback**: Fallback automatico a Azure standard se RealtimeTTS fallisce
+1. **Voice Cloning**: RealtimeTTS supports Coqui TTS for custom voices
+2. **Local TTS**: Offline option with Piper TTS (zero network latency)
+3. **Adaptive Buffering**: Automatic buffer adjustment based on network latency
+4. **Multi-Engine Fallback**: Automatic fallback to Azure standard if RealtimeTTS fails
 
 ---
 

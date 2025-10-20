@@ -1,78 +1,78 @@
 # 📊 Optimization Summary - RealtimeTTS & Adaptive Buffering
 
-**Data**: Ottobre 2025  
-**Versione**: 2.0
+**Date**: October 2025  
+**Version**: 2.0
 
 ---
 
-## 🎯 Obiettivi Raggiunti
+## 🎯 Goals Achieved
 
-Il sistema di traduzione real-time è stato ottimizzato per raggiungere:
+The real-time translation system has been optimized to achieve:
 
-1. ✅ **Ultra-bassa latenza** sulla prima parola tradotta (< 1.5s)
-2. ✅ **Audio fluido** senza pause tra i chunk
-3. ✅ **Accento italiano corretto** con voce premium
-4. ✅ **Stabilità WebSocket** con riconnessione automatica
-5. ✅ **Chunking intelligente** che evita frammentazioni eccessive
+1. ✅ **Ultra-low latency** on first translated word (< 1.5s)
+2. ✅ **Smooth audio** without pauses between chunks
+3. ✅ **Correct Italian accent** with premium voice
+4. ✅ **WebSocket stability** with automatic reconnection
+5. ✅ **Intelligent chunking** that avoids excessive fragmentation
 
 ---
 
-## 🚀 Architettura Ottimizzata
+## 🚀 Optimized Architecture
 
-### Pattern Continuous Generator
+### Continuous Generator Pattern
 
-**Prima (problematico):**
+**Before (problematic):**
 ```python
-# Ogni chunk richiedeva una nuova sessione stream.play()
+# Each chunk required a new stream.play() session
 for text in chunks:
     stream.feed(text)
-    stream.play()  # ❌ Gap tra le riproduzioni
+    stream.play()  # ❌ Gap between plays
 ```
 
-**Dopo (ottimizzato):**
+**After (optimized):**
 ```python
-# Un singolo stream.play() alimentato da generator continuo
+# Single stream.play() fed by continuous generator
 def _text_generator(self):
     while active:
         # Yield chunks continuously as they arrive
         yield chunk
 
 stream.feed(self._text_generator())
-stream.play()  # ✅ Nessun gap, audio continuo
+stream.play()  # ✅ No gaps, continuous audio
 ```
 
-**Benefici:**
-- Zero pause tra chunk consecutivi
-- Pre-buffering solo sul primo chunk
-- Audio seamless come stream unico
+**Benefits:**
+- Zero pauses between consecutive chunks
+- Pre-buffering only on first chunk
+- Seamless audio like a single stream
 
 ---
 
 ## ⚡ Adaptive Buffer Strategy
 
-### Buffer DeepL → TTS
+### DeepL → TTS Buffer
 
-**Strategia a due velocità** per ottimizzare latenza iniziale + fluidità:
+**Two-speed strategy** to optimize initial latency + smoothness:
 
 ```python
-# PRIMO chunk (latenza minima)
-max_buffer_length_first = 18 chars  # Piccolo per risposta rapida
-buffer_timeout_first = 1.0s         # Timeout breve
+# FIRST chunk (minimum latency)
+max_buffer_length_first = 18 chars  # Small for quick response
+buffer_timeout_first = 1.0s         # Short timeout
 
-# CHUNK SUCCESSIVI (fluidità massima)
-max_buffer_length = 40 chars        # Più grande per meno frammentazioni
-buffer_timeout = 2.0s               # Timeout più generoso
+# SUBSEQUENT CHUNKS (maximum smoothness)
+max_buffer_length = 40 chars        # Larger for fewer fragmentations
+buffer_timeout = 2.0s               # More generous timeout
 ```
 
-**Logica di flush ibrida:**
-1. **Delimitatore** trovato (`.`, `!`, `?`, `;`, `:`, `,`) + lunghezza minima OK
-2. **Max length** raggiunto → flush forzato
-3. **Timeout** scaduto → flush forzato
-4. **Fine traduzione** → flush forzato
+**Hybrid flush logic:**
+1. **Delimiter** found (`.`, `!`, `?`, `;`, `:`, `,`) + minimum length OK
+2. **Max length** reached → forced flush
+3. **Timeout** expired → forced flush
+4. **Translation end** → forced flush
 
-**Reset automatico:**
-- Dopo 2 secondi di silenzio, `is_first_translation` torna a `True`
-- Questo garantisce bassa latenza anche dopo pause lunghe
+**Automatic reset:**
+- After 2 seconds of silence, `is_first_translation` returns to `True`
+- This ensures low latency even after long pauses
 
 ---
 
@@ -80,53 +80,53 @@ buffer_timeout = 2.0s               # Timeout più generoso
 
 ### RealtimeTTS Configuration
 
-**Parametri adattivi basati sul chunk:**
+**Adaptive parameters based on chunk:**
 
 ```python
-# PRIMO chunk (instant start)
-buffer_threshold = 0.0              # Zero latenza!
-pre_buffer_ms = 0                   # Nessun pre-buffering
-force_first_fragment_after_words = 4  # Anticipa primi frammenti
+# FIRST chunk (instant start)
+buffer_threshold = 0.0              # Zero latency!
+pre_buffer_ms = 0                   # No pre-buffering
+force_first_fragment_after_words = 4  # Anticipate first fragments
 
-# CHUNK SUCCESSIVI (smooth playback)
-buffer_threshold_later = 0.2s       # 200ms buffer per smoothness
-pre_buffer_ms_later = 80ms          # Pre-buffer per batching
+# SUBSEQUENT CHUNKS (smooth playback)
+buffer_threshold_later = 0.2s       # 200ms buffer for smoothness
+pre_buffer_ms_later = 80ms          # Pre-buffer for batching
 ```
 
 **Smart Batching:**
 ```python
-# Prima batch: yield immediatamente (risposta istantanea)
+# First batch: yield immediately (instant response)
 if is_first_batch:
     yield chunk  # No wait!
 
-# Batch successive: attende almeno 2 chunk o 150ms timeout
+# Subsequent batches: wait for at least 2 chunks or 150ms timeout
 if len(batch) >= 2 or timeout_150ms:
     yield " ".join(batch)
 ```
 
-**Lookahead disabilitato sul primo batch:**
-- Primo batch: yield subito senza aspettare altri chunk
-- Batch successivi: lookahead attivo per aggregare chunk vicini
+**Lookahead disabled on first batch:**
+- First batch: yield immediately without waiting for other chunks
+- Subsequent batches: lookahead active to aggregate nearby chunks
 
 ---
 
-## 🗣️ Voce Premium Italiana
+## 🗣️ Premium Italian Voice
 
-**Cambio voce per accenti corretti:**
+**Voice change for correct accents:**
 
 ```python
-# PRIMA (accento sbagliato)
-VOICE_MAP["it"] = "it-IT-ElsaNeural"  # ❌ Enfasi scorrette
+# BEFORE (wrong accent)
+VOICE_MAP["it"] = "it-IT-ElsaNeural"  # ❌ Incorrect emphasis
 
-# DOPO (accento perfetto)
+# AFTER (perfect accent)
 VOICE_MAP["it"] = "it-IT-IsabellaNeural"  # ✅ Premium voice
 ```
 
-**Caratteristiche IsabellaNeural:**
-- Voce femminile premium
-- Prosody naturale italiana
-- Accenti e stress corretti
-- Intonazione espressiva
+**IsabellaNeural Features:**
+- Premium female voice
+- Natural Italian prosody
+- Correct accents and stress
+- Expressive intonation
 
 ---
 
@@ -134,18 +134,18 @@ VOICE_MAP["it"] = "it-IT-IsabellaNeural"  # ✅ Premium voice
 
 ### Reconnection System
 
-**Implementazione robusta:**
+**Robust implementation:**
 
 ```python
-# Ping automatico built-in (no custom keep-alive!)
+# Built-in automatic ping (no custom keep-alive!)
 ws = await websockets.connect(
     uri,
-    ping_interval=10,   # Ping ogni 10s
-    ping_timeout=20,    # Timeout pong 20s
-    close_timeout=10    # Timeout chiusura 10s
+    ping_interval=10,   # Ping every 10s
+    ping_timeout=20,    # Pong timeout 20s
+    close_timeout=10    # Close timeout 10s
 )
 
-# Automatic reconnection con backoff
+# Automatic reconnection with backoff
 while running:
     try:
         await connect()
@@ -154,56 +154,56 @@ while running:
         await asyncio.sleep(wait_time)
 ```
 
-**Fix critici:**
-1. ✅ Rimosso `return_exceptions=True` (nascondeva errori)
-2. ✅ Rimosso custom keep-alive (DeepL lo rifiuta con error 400)
-3. ✅ Proper exception re-raising per trigger riconnessione
-4. ✅ Backoff esponenziale per evitare storm di tentativi
+**Critical fixes:**
+1. ✅ Removed `return_exceptions=True` (was hiding errors)
+2. ✅ Removed custom keep-alive (DeepL rejects it with error 400)
+3. ✅ Proper exception re-raising to trigger reconnection
+4. ✅ Exponential backoff to avoid retry storms
 
 ---
 
 ## 📈 Performance Metrics
 
-### Latenza End-to-End
+### End-to-End Latency
 
-| Metrica | Prima | Dopo | Miglioramento |
+| Metric | Before | After | Improvement |
 |---------|-------|------|---------------|
-| **Primo chunk** | ~2.5s | **~1.0s** | **-60%** ✅ |
+| **First chunk** | ~2.5s | **~1.0s** | **-60%** ✅ |
 | **TTS synthesis** | ~150ms | ~75ms | **-50%** ✅ |
-| **Gap tra chunk** | 100-200ms | **0ms** | **-100%** ✅ |
+| **Gap between chunks** | 100-200ms | **0ms** | **-100%** ✅ |
 
-### Stabilità
+### Stability
 
-| Metrica | Prima | Dopo | Miglioramento |
+| Metric | Before | After | Improvement |
 |---------|-------|------|---------------|
-| **WebSocket uptime** | 30-60s | **Illimitato** | ✅ |
-| **Riconnessioni/ora** | 30+ | **0-2** | **-93%** ✅ |
-| **Traduzioni perse** | 5-10% | **<1%** | **-90%** ✅ |
+| **WebSocket uptime** | 30-60s | **Unlimited** | ✅ |
+| **Reconnections/hour** | 30+ | **0-2** | **-93%** ✅ |
+| **Lost translations** | 5-10% | **<1%** | **-90%** ✅ |
 
 ### Audio Quality
 
-| Aspetto | Prima | Dopo | Risultato |
+| Aspect | Before | After | Result |
 |---------|-------|------|-----------|
-| **Fluidità** | Frammentato | **Seamless** | ✅ |
-| **Accento italiano** | Scorretto | **Naturale** | ✅ |
-| **Chunking** | Troppi chunk piccoli | **Chunk ottimali** | ✅ |
+| **Smoothness** | Fragmented | **Seamless** | ✅ |
+| **Italian accent** | Incorrect | **Natural** | ✅ |
+| **Chunking** | Too many small chunks | **Optimal chunks** | ✅ |
 
 ---
 
-## 🔧 Configurazione Finale
+## 🔧 Final Configuration
 
 ### `.env` Settings
 
 ```env
 # TTS Configuration
-USE_REALTIME_TTS=1          # RealtimeTTS attivo
-SPEECH_RATE=+40%            # Velocità parlato
+USE_REALTIME_TTS=1          # RealtimeTTS active
+SPEECH_RATE=+40%            # Speech speed
 
 # DeepL Configuration
 DEEPL_EXPERIMENTAL_MODE=1   # Low-latency mode
 
 # Voice Selection
-# (Modificato in settings.py direttamente)
+# (Modified directly in settings.py)
 VOICE_MAP["it"] = "it-IT-IsabellaNeural"  # Premium voice
 ```
 
@@ -230,7 +230,7 @@ buffer_timeout = 2.0               # 2s timeout subsequent
 
 ---
 
-## 📝 Files Modified
+## 📝 Modified Files
 
 ### Core Changes
 
@@ -239,7 +239,7 @@ buffer_timeout = 2.0               # 2s timeout subsequent
    - Adaptive buffer thresholds
    - Smart batching strategy
    - Lookahead control per batch
-   - Pre-buffering adaptivo
+   - Adaptive pre-buffering
 
 2. **`translation/deepl_translator.py`**
    - Adaptive buffer strategy
@@ -259,66 +259,66 @@ buffer_timeout = 2.0               # 2s timeout subsequent
 
 ### 1. Continuous Streaming > Multiple Sessions
 
-**Errore comune:**
+**Common mistake:**
 ```python
-# ❌ Ogni chunk è una nuova sessione
+# ❌ Each chunk is a new session
 for chunk in chunks:
-    stream.play(chunk)  # Gap inevitabile
+    stream.play(chunk)  # Unavoidable gap
 ```
 
-**Soluzione:**
+**Solution:**
 ```python
-# ✅ Un generator alimenta una sessione continua
+# ✅ A generator feeds a continuous session
 stream.feed(generator())
-stream.play()  # Audio continuo
+stream.play()  # Continuous audio
 ```
 
 ### 2. Adaptive Behavior is Key
 
-Non esiste una configurazione universale perfetta:
-- **Primo chunk**: Priorità LATENZA (piccolo, veloce)
-- **Chunk successivi**: Priorità FLUIDITÀ (grandi, batched)
+There is no perfect universal configuration:
+- **First chunk**: LATENCY priority (small, fast)
+- **Subsequent chunks**: SMOOTHNESS priority (large, batched)
 
 ### 3. Batching Prevents Fragmentation
 
-Aggregare 2+ chunk prima di yield:
-- ✅ Meno overhead TTS
-- ✅ Audio più naturale
-- ✅ Meno "robot voice" effect
+Aggregate 2+ chunks before yield:
+- ✅ Less TTS overhead
+- ✅ More natural audio
+- ✅ Less "robot voice" effect
 
 ### 4. Custom Solutions vs Library Defaults
 
 **DeepL WebSocket:**
 - ❌ Custom keep-alive → Error 400
-- ✅ Built-in ping → Funziona perfettamente
+- ✅ Built-in ping → Works perfectly
 
-**Lezione**: Usare sempre le feature native quando disponibili!
+**Lesson**: Always use native features when available!
 
 ---
 
 ## 🚀 Future Improvements
 
-### Possibili ottimizzazioni future:
+### Possible future optimizations:
 
 1. **Dynamic Buffer Adaptation**
-   - Analizzare pattern traduzione per ottimizzare buffer size
-   - Machine learning per predire lunghezza ottimale chunk
+   - Analyze translation patterns to optimize buffer size
+   - Machine learning to predict optimal chunk length
 
 2. **Voice Cloning**
-   - Sostituire Azure TTS con voice cloning
-   - Personalizzazione per ogni utente
+   - Replace Azure TTS with voice cloning
+   - Personalization for each user
 
 3. **Multi-Language Voice Selection**
-   - Database voci ottimali per ogni lingua
-   - Auto-selezione basata su target language
+   - Database of optimal voices for each language
+   - Auto-selection based on target language
 
 4. **Pre-fetch TTS**
-   - Pre-synthesize chunks comuni
-   - Cache audio per frasi ripetute
+   - Pre-synthesize common chunks
+   - Cache audio for repeated phrases
 
 5. **GPU Acceleration**
-   - TTS synthesis su GPU
-   - Latenza <30ms potenziale
+   - TTS synthesis on GPU
+   - Potential <30ms latency
 
 ---
 
@@ -326,7 +326,7 @@ Aggregare 2+ chunk prima di yield:
 
 ### Log Analysis
 
-I log mostrano ora informazioni dettagliate:
+Logs now show detailed information:
 
 ```log
 [INFO] [DOWN]-TTS ⚡ Starting continuous playback session
@@ -334,17 +334,17 @@ I log mostrano ora informazioni dettagliate:
 [INFO] [DOWN] TTS synthesis: 74.7ms ✅
 ```
 
-**Metriche chiave da monitorare:**
-- `TTS synthesis`: Deve essere <100ms
-- `Yielding`: Frequency indica chunking quality
-- `Starting playback session`: Deve essere raro (1 per conversazione)
+**Key metrics to monitor:**
+- `TTS synthesis`: Should be <100ms
+- `Yielding`: Frequency indicates chunking quality
+- `Starting playback session`: Should be rare (1 per conversation)
 
 ### Timing Reports
 
-I timing report auto-generati mostrano:
-- **Translation latency**: Mediana, P95, max
-- **TTS overhead**: Tempo dal buffer al TTS
-- **Variability**: Stabilità della connessione
+Auto-generated timing reports show:
+- **Translation latency**: Median, P95, max
+- **TTS overhead**: Time from buffer to TTS
+- **Variability**: Connection stability
 
 **Target values:**
 - Translation latency (median): <1500ms ✅
@@ -353,20 +353,20 @@ I timing report auto-generati mostrano:
 
 ---
 
-## ✅ Conclusioni
+## ✅ Conclusions
 
-Il sistema è stato ottimizzato con successo per:
+The system has been successfully optimized for:
 
-1. **Latenza minimale** sul primo chunk (~1.0s end-to-end)
-2. **Audio continuo** senza pause (0ms gap)
-3. **Qualità vocale** premium con accenti corretti
-4. **Stabilità WebSocket** con uptime illimitato
-5. **Chunking intelligente** che bilancia velocità e fluidità
+1. **Minimal latency** on first chunk (~1.0s end-to-end)
+2. **Continuous audio** without pauses (0ms gap)
+3. **Premium voice quality** with correct accents
+4. **WebSocket stability** with unlimited uptime
+5. **Intelligent chunking** that balances speed and smoothness
 
-**Risultato finale**: Sistema production-ready con performance eccellenti! 🎉
+**Final result**: Production-ready system with excellent performance! 🎉
 
 ---
 
 **Maintainer**: Azure Translator Team  
-**Last Updated**: Ottobre 2025  
+**Last Updated**: October 2025  
 **Version**: 2.0 - Continuous Generator + Adaptive Buffering
