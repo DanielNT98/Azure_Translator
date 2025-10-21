@@ -314,4 +314,4 @@ If you don't see this, patching doesn't work. Voice_id must be set correctly in 
 
 **Happy testing! 🚀**
 
-For questions or issues, check system logs or the `ELEVENLABS_README.md` file for detailed troubleshooting.
+For questions or issues, check system logs or the [tts/ELEVENLABS_README.md](../tts/ELEVENLABS_README.md) file for detailed troubleshooting.

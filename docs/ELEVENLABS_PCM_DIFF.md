@@ -1,10 +1,10 @@
 # 🔄 ElevenLabs PCM Fix - Code Diff
 
-Questo file mostra il **diff esatto** delle modifiche da applicare a `elevenlabs_engine.py`.
+This file shows the **exact diff** of modifications to apply to `elevenlabs_engine.py`.
 
 ---
 
-## 📍 Modifica 1: Parametro `__init__()`
+## 📍 Modification 1: `__init__()` Parameter
 
 ```diff
 def __init__(
@@ -23,7 +23,7 @@ def __init__(
 
 ---
 
-## 📍 Modifica 2: Docstring parametro
+## 📍 Modification 2: Parameter Docstring
 
 ```diff
         model (str, optional): Model. Defaults to "eleven_multilingual_v2". Some models may not work with real time inference.
@@ -34,7 +34,7 @@ def __init__(
 
 ---
 
-## 📍 Modifica 3: Salvataggio formato
+## 📍 Modification 3: Format Storage
 
 ```diff
     self.model = model
@@ -52,9 +52,9 @@ def __init__(
 
 ---
 
-## 📍 Modifica 4: `get_stream_info()`
+## 📍 Modification 4: `get_stream_info()`
 
-### Prima (BROKEN):
+### Before (BROKEN):
 ```python
 def get_stream_info(self):
     """
@@ -115,9 +115,9 @@ def get_stream_info(self):
 
 ---
 
-## 📍 Modifica 5: `synthesize()` - Passa formato all'API
+## 📍 Modification 5: `synthesize()` - Pass Format to API
 
-### Prima (BROKEN):
+### Before (BROKEN):
 ```python
 try:
     audio_stream = self.client.text_to_speech.stream(
@@ -132,7 +132,7 @@ try:
     return True
 ```
 
-### Dopo (FIXED):
+### After (FIXED):
 ```python
 try:
     # NEW: Request PCM format from API
@@ -168,28 +168,28 @@ try:
 
 ---
 
-## 🎯 Riepilogo Completo
+## 🎯 Complete Summary
 
 ### File: `elevenlabs_engine.py`
 
-**Righe modificate**: ~15 righe totali  
-**Tempo richiesto**: ~5 minuti  
-**Difficoltà**: ⭐⭐⚪⚪⚪ (facile)
+**Lines modified**: ~15 total lines  
+**Time required**: ~5 minutes  
+**Difficulty**: ⭐⭐⚪⚪⚪ (easy)
 
-### Modifiche:
-1. ✅ Aggiungi parametro `output_format` a `__init__()` (1 riga)
-2. ✅ Aggiungi documentazione parametro (2 righe)
-3. ✅ Salva formato e parsa sample rate (6 righe)
-4. ✅ Modifica `get_stream_info()` per restituire PCM (6 righe)
-5. ✅ Passa formato all'API in `synthesize()` (1 riga)
+### Modifications:
+1. ✅ Add `output_format` parameter to `__init__()` (1 line)
+2. ✅ Add parameter documentation (2 lines)
+3. ✅ Store format and parse sample rate (6 lines)
+4. ✅ Modify `get_stream_info()` to return PCM (6 lines)
+5. ✅ Pass format to API in `synthesize()` (1 line)
 
-**Totale**: 16 righe aggiunte/modificate
+**Total**: 16 lines added/modified
 
 ---
 
 ## 🧪 Testing
 
-### Prima della modifica:
+### Before modification:
 ```python
 # elevenlabs_engine.py (ORIGINALE)
 >>> engine = ElevenlabsEngine(api_key="...", voice="Nicole")
@@ -197,29 +197,29 @@ try:
 (pyaudio.paCustomFormat, -1, -1)  # ← Formato MP3
 ```
 
-### Dopo la modifica:
+### After modification:
 ```python
-# elevenlabs_engine.py (MODIFICATO)
+# elevenlabs_engine.py (MODIFIED)
 >>> engine = ElevenlabsEngine(api_key="...", voice="Nicole", output_format="pcm_24000")
 >>> engine.get_stream_info()
-(pyaudio.paInt16, 1, 24000)  # ← Formato PCM! ✅
+(pyaudio.paInt16, 1, 24000)  # ← PCM format! ✅
 ```
 
 ---
 
-## 📊 Impatto
+## 📊 Impact
 
 ### Performance:
-- ⚪ Nessun impatto negativo
-- ✅ Stessa qualità audio
-- ✅ Stessa latenza
+- ⚪ No negative impact
+- ✅ Same audio quality
+- ✅ Same latency
 
-### Funzionalità:
-- ✅ Device routing preservato
-- ✅ Compatibilità retroattiva (fallback MP3)
-- ✅ Nessun breaking change
+### Functionality:
+- ✅ Device routing preserved
+- ✅ Backward compatibility (MP3 fallback)
+- ✅ No breaking changes
 
-### Compatibilità:
+### Compatibility:
 - ✅ Python 3.8+
 - ✅ elevenlabs >= 1.0.0
 - ✅ RealtimeTTS >= 0.3.0
@@ -227,68 +227,68 @@ try:
 
 ---
 
-## 🔍 Verifica Modifiche
+## 🔍 Verify Modifications
 
-### Checklist prima di salvare:
+### Checklist before saving:
 
 ```bash
-# 1. Backup creato?
-ls elevenlabs_engine.py.backup  # ← Deve esistere
+# 1. Backup created?
+ls elevenlabs_engine.py.backup  # ← Must exist
 
-# 2. Tutte le modifiche applicate?
-grep "output_format" elevenlabs_engine.py  # ← Deve trovare 5+ occorrenze
+# 2. All modifications applied?
+grep "output_format" elevenlabs_engine.py  # ← Must find 5+ occurrences
 
-# 3. Indentazione corretta?
-python -m py_compile elevenlabs_engine.py  # ← Nessun errore syntax
+# 3. Indentation correct?
+python -m py_compile elevenlabs_engine.py  # ← No syntax errors
 
-# 4. Cache eliminata?
-rm -rf __pycache__/  # ← Forza ricompilazione
+# 4. Cache deleted?
+rm -rf __pycache__/  # ← Force recompilation
 ```
 
-### Log attesi dopo riavvio:
+### Expected logs after restart:
 
 ```
-✅ SUCCESSO:
+✅ SUCCESS:
 [UP]-TTS Initializing ElevenlabsEngine with voice=..., model=..., output_format=pcm_24000
 [UP]-TTS ElevenlabsEngine created successfully (PCM mode)
 
-❌ FALLIMENTO:
-[UP]-TTS ElevenlabsEngine created successfully  # ← Manca "(PCM mode)"
+❌ FAILURE:
+[UP]-TTS ElevenlabsEngine created successfully  # ← Missing "(PCM mode)"
 ```
 
 ---
 
-## 🎓 Spiegazione Tecnica
+## 🎓 Technical Explanation
 
-### Perché funziona?
+### Why does it work?
 
 ```python
-# PRIMA (MP3):
+# BEFORE (MP3):
 get_stream_info() → (pyaudio.paCustomFormat, -1, -1)
                          ↓
-stream_player.py vede paCustomFormat
+stream_player.py sees paCustomFormat
                          ↓
-Chiama AudioSegment.from_file(chunk, format="mp3")
+Calls AudioSegment.from_file(chunk, format="mp3")
                          ↓
-pydub decodifica MP3 → PCM raw
+pydub decodes MP3 → raw PCM
                          ↓
-PyAudio.open() riceve PCM senza device_index context
+PyAudio.open() receives PCM without device_index context
                          ↓
-Audio va su default device ❌
+Audio goes to default device ❌
 
-# DOPO (PCM):
+# AFTER (PCM):
 get_stream_info() → (pyaudio.paInt16, 1, 24000)
                          ↓
-stream_player.py vede paInt16 (PCM)
+stream_player.py sees paInt16 (PCM)
                          ↓
-Salta decodifica MP3 (già PCM!)
+Skips MP3 decode (already PCM!)
                          ↓
-PyAudio.open(output_device_index=10) riceve PCM diretto
+PyAudio.open(output_device_index=10) receives direct PCM
                          ↓
-Audio va su Cable-A ✅
+Audio goes to Cable-A ✅
 ```
 
-### Flusso chiamate:
+### Call flow:
 
 ```
 tts/elevenlabs_tts.py:
@@ -297,15 +297,15 @@ tts/elevenlabs_tts.py:
    └─ synthesize()
       └─ client.text_to_speech.stream(output_format="pcm_24000")
          └─ ElevenLabs API → PCM chunks
-            └─ queue.put(chunk)  # ← PCM diretto!
+            └─ queue.put(chunk)  # ← Direct PCM!
 
 stream_player.py:
-└─ Riceve chunk dalla queue
-   └─ Controlla formato: paInt16 (PCM)
-      └─ Salta MP3 decode
+└─ Receives chunk from queue
+   └─ Checks format: paInt16 (PCM)
+      └─ Skips MP3 decode
          └─ PyAudio.open(device=10) → Cable-A ✅
 ```
 
 ---
 
-**✅ Con questo diff, il fix è completo e l'audio routing funzionerà correttamente!**
+**✅ With this diff, the fix is complete and audio routing will work correctly!**

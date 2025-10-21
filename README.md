@@ -66,19 +66,16 @@ Azure__Transaltor/
 │   ├── main_8_best.py              # Original Azure implementation
 │   └── main_10_deepl.py            # Original DeepL implementation
 │
-└── docs/                            # Documentation
-    ├── README.md                    # This file (main documentation)
-    ├── OPTIMIZATION_SUMMARY.md      # Performance optimizations v2.0
-    ├── REALTIME_TTS_GUIDE.md        # RealtimeTTS integration guide
-    ├── REFACTORING_SUMMARY.md       # Architecture refactoring details
-    ├── DEEPL_EXPERIMENTAL_FEATURE.md # DeepL low-latency mode
-    ├── DOCSTRINGS_COMPLETE.md       # Docstring enhancement report
+└── docs/                            # 📚 Documentation
     ├── ELEVENLABS_INDEX.md          # ElevenLabs navigation guide
     ├── ELEVENLABS_QUICKSTART.md     # ElevenLabs quick start (4 steps)
     ├── ELEVENLABS_SETUP.md          # ElevenLabs complete setup
     ├── ELEVENLABS_PCM_FIX.md        # Audio routing fix (CRITICAL)
     ├── ELEVENLABS_PCM_DIFF.md       # Code diff for developers
-    └── ELEVENLABS_COMMIT_SUMMARY.md # ElevenLabs integration summary
+    ├── OPTIMIZATION_SUMMARY.md      # Performance optimizations v2.0
+    ├── REALTIME_TTS_GUIDE.md        # RealtimeTTS integration guide
+    ├── REFACTORING_SUMMARY.md       # Architecture refactoring details
+    └── DEEPL_EXPERIMENTAL_FEATURE.md # DeepL low-latency mode
 ```
 
 ## 🚀 Running the System
@@ -186,7 +183,7 @@ Both modes share these core components:
      - See `REALTIME_TTS_GUIDE.md` for details
    - **ElevenLabs TTS** (`tts/elevenlabs_tts.py`): Premium voice quality (EXPERIMENTAL)
      - Enable with `USE_ELEVENLABS_TTS=1` in `.env`
-     - See `ELEVENLABS_SETUP.md` for configuration
+     - See [docs/ELEVENLABS_SETUP.md](docs/ELEVENLABS_SETUP.md) for configuration
      - **⚠️ IMPORTANT**: Requires PCM format for audio routing (see below)
    - All use thread-pooled synthesis and queue-based playback
 
@@ -230,7 +227,7 @@ ElevenLabs API → PCM stream → PyAudio(device=10) → ✅ Cable-A Input
 
 ### 🔧 Required Modification
 
-> **📖 Complete Guide**: See `ELEVENLABS_PCM_FIX.md` for detailed step-by-step instructions with troubleshooting.
+> **📖 Complete Guide**: See [docs/ELEVENLABS_PCM_FIX.md](docs/ELEVENLABS_PCM_FIX.md) for detailed step-by-step instructions with troubleshooting.
 
 **File**: `C:\Users\[USER]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\RealtimeTTS\engines\elevenlabs_engine.py`
 
@@ -396,19 +393,17 @@ python utils/analyze_timing.py logs/[log_file].log
 
 ### Core Documentation
 - [README.md](README.md) - This file (system overview)
-- [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md) - Performance optimizations v2.0
-- [REALTIME_TTS_GUIDE.md](REALTIME_TTS_GUIDE.md) - RealtimeTTS integration guide
-- [DEEPL_EXPERIMENTAL_FEATURE.md](DEEPL_EXPERIMENTAL_FEATURE.md) - DeepL low-latency mode
-- [REFACTORING_SUMMARY.md](REFACTORING_SUMMARY.md) - Detailed refactoring analysis
-- [DOCSTRINGS_COMPLETE.md](DOCSTRINGS_COMPLETE.md) - Docstring enhancement report
+- [docs/OPTIMIZATION_SUMMARY.md](docs/OPTIMIZATION_SUMMARY.md) - Performance optimizations v2.0
+- [docs/REALTIME_TTS_GUIDE.md](docs/REALTIME_TTS_GUIDE.md) - RealtimeTTS integration guide
+- [docs/DEEPL_EXPERIMENTAL_FEATURE.md](docs/DEEPL_EXPERIMENTAL_FEATURE.md) - DeepL low-latency mode
+- [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) - Detailed refactoring analysis
 
 ### ElevenLabs TTS Documentation
-- **[ELEVENLABS_INDEX.md](ELEVENLABS_INDEX.md)** - 📚 Start here! Navigation guide
-- **[ELEVENLABS_QUICKSTART.md](ELEVENLABS_QUICKSTART.md)** - ⚡ Quick start (4 steps)
-- **[ELEVENLABS_PCM_FIX.md](ELEVENLABS_PCM_FIX.md)** - 🔧 Fix audio routing (CRITICAL)
-- **[ELEVENLABS_PCM_DIFF.md](ELEVENLABS_PCM_DIFF.md)** - 📝 Code diff (for developers)
-- **[ELEVENLABS_SETUP.md](ELEVENLABS_SETUP.md)** - 📖 Complete setup guide
-- **[ELEVENLABS_COMMIT_SUMMARY.md](ELEVENLABS_COMMIT_SUMMARY.md)** - Integration summary
+- **[docs/ELEVENLABS_INDEX.md](docs/ELEVENLABS_INDEX.md)** - 📚 Start here! Navigation guide
+- **[docs/ELEVENLABS_QUICKSTART.md](docs/ELEVENLABS_QUICKSTART.md)** - ⚡ Quick start (4 steps)
+- **[docs/ELEVENLABS_PCM_FIX.md](docs/ELEVENLABS_PCM_FIX.md)** - 🔧 Fix audio routing (CRITICAL)
+- **[docs/ELEVENLABS_PCM_DIFF.md](docs/ELEVENLABS_PCM_DIFF.md)** - 📝 Code diff (for developers)
+- **[docs/ELEVENLABS_SETUP.md](docs/ELEVENLABS_SETUP.md)** - 📖 Complete setup guide
 - [tts/ELEVENLABS_README.md](tts/ELEVENLABS_README.md) - 🧪 TTS module documentation
 - [test_elevenlabs.py](test_elevenlabs.py) - 🧪 Test script
 

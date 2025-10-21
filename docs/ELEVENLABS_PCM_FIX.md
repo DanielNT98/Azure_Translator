@@ -1,22 +1,22 @@
-# 🔧 ElevenLabs PCM Format Fix - Guida Dettagliata
+# 🔧 ElevenLabs PCM Format Fix - Detailed Guide
 
-## 🎯 Problema
+## 🎯 Problem
 
-Quando si usa ElevenLabs TTS con **virtual audio cables** (VB-Cable), l'audio **non viene instradato correttamente** al dispositivo specificato (es. Cable-A Input), ma viene riprodotto sul dispositivo di default del sistema.
+When using ElevenLabs TTS with **virtual audio cables** (VB-Cable), audio **is not routed correctly** to the specified device (e.g. Cable-A Input), but plays on the system's default device instead.
 
-### Causa Tecnica
+### Technical Cause
 
 ```
-❌ FLUSSO MP3 (DEFAULT - NON FUNZIONA):
+❌ MP3 FLOW (DEFAULT - DOESN'T WORK):
 ┌─────────────────┐     ┌──────────┐     ┌─────────────┐     ┌─────────────┐
 │ ElevenLabs API  │ --> │ MP3 data │ --> │ pydub decode│ --> │ PyAudio     │
-│                 │     │ (stream) │     │ (perde ctx) │     │ (default!)  │
+│                 │     │ (stream) │     │ (loses ctx) │     │ (default!)  │
 └─────────────────┘     └──────────┘     └─────────────┘     └─────────────┘
                                                 ↑
                                           Device routing
-                                          PERSO QUI! ❌
+                                          LOST HERE! ❌
 
-✅ FLUSSO PCM (FIX - FUNZIONA):
+✅ PCM FLOW (FIX - WORKS):
 ┌─────────────────┐     ┌──────────┐     ┌─────────────┐
 │ ElevenLabs API  │ --> │ PCM data │ --> │ PyAudio     │
 │ output_format=  │     │ (stream) │     │ (device=10) │
@@ -24,39 +24,39 @@ Quando si usa ElevenLabs TTS con **virtual audio cables** (VB-Cable), l'audio **
 └─────────────────┘     └──────────┘     └─────────────┘
 ```
 
-**Spiegazione**:
-- **Azure TTS**: Restituisce direttamente PCM/WAV (`riff-16khz-16bit-mono-pcm`) → Device routing preservato ✅
-- **ElevenLabs (default)**: Restituisce MP3 → Necessita decodifica → Device routing perso durante decode ❌
-- **ElevenLabs (PCM)**: Restituisce PCM → Nessuna decodifica → Device routing preservato ✅
+**Explanation**:
+- **Azure TTS**: Returns direct PCM/WAV (`riff-16khz-16bit-mono-pcm`) → Device routing preserved ✅
+- **ElevenLabs (default)**: Returns MP3 → Requires decoding → Device routing lost during decode ❌
+- **ElevenLabs (PCM)**: Returns PCM → No decoding → Device routing preserved ✅
 
 ---
 
-## 🛠️ Soluzione: Modifica RealtimeTTS
+## 🛠️ Solution: Modify RealtimeTTS
 
-### Passo 1: Localizza il File
+### Step 1: Locate the File
 
-**Path completo** (Windows, Python 3.11):
+**Full path** (Windows, Python 3.11):
 ```
-C:\Users\[NOME_UTENTE]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\RealtimeTTS\engines\elevenlabs_engine.py
+C:\Users\[USERNAME]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\RealtimeTTS\engines\elevenlabs_engine.py
 ```
 
-**Trova il tuo path**:
+**Find your path**:
 ```bash
 python -c "import RealtimeTTS; import os; print(os.path.dirname(RealtimeTTS.__file__))"
 ```
 
-### Passo 2: Backup
+### Step 2: Backup
 
 ```bash
 # PowerShell
 Copy-Item "PATH\elevenlabs_engine.py" "PATH\elevenlabs_engine.py.backup"
 ```
 
-### Passo 3: Modifiche al Codice
+### Step 3: Code Modifications
 
-#### Modifica 1: Aggiungi parametro `output_format` a `__init__()`
+#### Modification 1: Add `output_format` parameter to `__init__()`
 
-**CERCA** (circa riga 24):
+**FIND** (around line 24):
 ```python
 def __init__(
     self,
@@ -71,7 +71,7 @@ def __init__(
 ):
 ```
 
-**SOSTITUISCI CON**:
+**REPLACE WITH**:
 ```python
 def __init__(
     self,
@@ -83,35 +83,35 @@ def __init__(
     stability: float = 50.0,
     style_exxageration: float = 0.0,
     model: str = "eleven_multilingual_v2",
-    output_format: str = "pcm_24000",  # ← AGGIUNGI QUESTO
+    output_format: str = "pcm_24000",  # ← ADD THIS
 ):
 ```
 
-#### Modifica 2: Aggiungi documentazione parametro
+#### Modification 2: Add parameter documentation
 
-**CERCA** (dentro la docstring):
+**FIND** (inside the docstring):
 ```python
     model (str, optional): Model. Defaults to "eleven_multilingual_v2". Some models may not work with real time inference.
 ```
 
-**AGGIUNGI SOTTO**:
+**ADD BELOW**:
 ```python
     output_format (str, optional): Audio format. Defaults to "pcm_24000". Options: pcm_8000, pcm_16000, pcm_22050, pcm_24000, pcm_32000, pcm_44100, pcm_48000, mp3_44100_128, etc.
 ```
 
-#### Modifica 3: Salva e parsa il formato
+#### Modification 3: Store and parse the format
 
-**CERCA** (circa riga 58):
+**FIND** (around line 58):
 ```python
     self.model = model
     if not api_key:
         api_key = os.environ.get("ELEVENLABS_API_KEY")
 ```
 
-**SOSTITUISCI CON**:
+**REPLACE WITH**:
 ```python
     self.model = model
-    self.output_format = output_format  # ← AGGIUNGI
+    self.output_format = output_format  # ← ADD THIS
     
     # Parse sample rate from format string
     if output_format.startswith('pcm_'):
@@ -123,9 +123,9 @@ def __init__(
         api_key = os.environ.get("ELEVENLABS_API_KEY")
 ```
 
-#### Modifica 4: Aggiorna `get_stream_info()`
+#### Modification 4: Update `get_stream_info()`
 
-**CERCA** (circa riga 82):
+**FIND** (around line 82):
 ```python
 def get_stream_info(self):
     """
@@ -140,7 +140,7 @@ def get_stream_info(self):
     return pyaudio.paCustomFormat, -1, -1
 ```
 
-**SOSTITUISCI CON**:
+**REPLACE WITH**:
 ```python
 def get_stream_info(self):
     """
@@ -160,9 +160,9 @@ def get_stream_info(self):
         return pyaudio.paCustomFormat, -1, -1
 ```
 
-#### Modifica 5: Passa formato all'API
+#### Modification 5: Pass format to API
 
-**CERCA** (circa riga 104):
+**FIND** (around line 104):
 ```python
     audio_stream = self.client.text_to_speech.stream(
         text=text,
@@ -171,94 +171,94 @@ def get_stream_info(self):
     )
 ```
 
-**SOSTITUISCI CON**:
+**REPLACE WITH**:
 ```python
     audio_stream = self.client.text_to_speech.stream(
         text=text,
         voice_id=self.id,
         model_id=self.model,
-        output_format=self.output_format,  # ← AGGIUNGI QUESTO
+        output_format=self.output_format,  # ← ADD THIS
     )
 ```
 
 ---
 
-## ✅ Verifica
+## ✅ Verification
 
-### Test 1: Controlla i Logs
+### Test 1: Check Logs
 
-Dopo aver avviato `main_deepl.py`, dovresti vedere:
+After starting `main_deepl.py`, you should see:
 
 ```
 [UP]-TTS Initializing ElevenlabsEngine with voice=Antonio Farina, model=eleven_flash_v2_5, output_format=pcm_24000
 [UP]-TTS ElevenlabsEngine created successfully (PCM mode)
 ```
 
-**Se vedi solo**:
+**If you only see**:
 ```
-[UP]-TTS ElevenlabsEngine created successfully  # ← Manca "(PCM mode)"
+[UP]-TTS ElevenlabsEngine created successfully  # ← Missing "(PCM mode)"
 ```
-La modifica **non è stata applicata correttamente**.
+The modification **was not applied correctly**.
 
 ### Test 2: Audio Routing
 
-1. Avvia il sistema: `python main_deepl.py`
-2. Parla nel microfono
-3. Verifica che l'audio tradotto **esca su Cable-A** (non dagli speaker/cuffie)
+1. Start the system: `python main_deepl.py`
+2. Speak into the microphone
+3. Verify that translated audio **comes out on Cable-A** (not from speakers/headphones)
 
-### Test 3: Verifica Device Index
+### Test 3: Verify Device Index
 
-Nei logs, cerca:
+In the logs, look for:
 ```
 [UP]-TTS Creating TextToAudioStream (PyAudio device=10)
 ```
 
-Device 10 dovrebbe essere Cable-A Input (o il tuo virtual cable configurato).
+Device 10 should be Cable-A Input (or your configured virtual cable).
 
 ---
 
-## 📋 Formati PCM Supportati
+## 📋 Supported PCM Formats
 
-ElevenLabs supporta questi formati PCM:
+ElevenLabs supports these PCM formats:
 
-| Formato | Sample Rate | Uso Consigliato |
+| Format | Sample Rate | Recommended Use |
 |---------|-------------|------------------|
-| `pcm_8000` | 8 kHz | Telefonia (bassa qualità) |
-| `pcm_16000` | 16 kHz | Voice over IP, buona latenza |
-| `pcm_22050` | 22.05 kHz | Qualità standard |
-| **`pcm_24000`** | **24 kHz** | **✅ RACCOMANDATO** (balance perfetto) |
-| `pcm_32000` | 32 kHz | Alta qualità |
-| `pcm_44100` | 44.1 kHz | CD quality (latenza più alta) |
-| `pcm_48000` | 48 kHz | Professional audio (latenza alta) |
+| `pcm_8000` | 8 kHz | Telephony (low quality) |
+| `pcm_16000` | 16 kHz | Voice over IP, good latency |
+| `pcm_22050` | 22.05 kHz | Standard quality |
+| **`pcm_24000`** | **24 kHz** | **✅ RECOMMENDED** (perfect balance) |
+| `pcm_32000` | 32 kHz | High quality |
+| `pcm_44100` | 44.1 kHz | CD quality (higher latency) |
+| `pcm_48000` | 48 kHz | Professional audio (high latency) |
 
-**Raccomandazione**: Usa `pcm_24000` per il miglior compromesso tra qualità audio e latenza.
+**Recommendation**: Use `pcm_24000` for the best compromise between audio quality and latency.
 
 ---
 
-## 🔄 Confronto: Prima e Dopo
+## 🔄 Comparison: Before and After
 
-### Prima (MP3)
+### Before (MP3)
 ```python
-# elevenlabs_engine.py (ORIGINALE)
+# elevenlabs_engine.py (ORIGINAL)
 def get_stream_info(self):
-    return pyaudio.paCustomFormat, -1, -1  # ← Segnala formato MP3
+    return pyaudio.paCustomFormat, -1, -1  # ← Signals MP3 format
 
 audio_stream = self.client.text_to_speech.stream(
     text=text,
     voice_id=self.id,
     model_id=self.model,
-    # output_format non specificato → default MP3
+    # output_format not specified → default MP3
 )
 ```
 
-**Risultato**: Audio va su default device ❌
+**Result**: Audio goes to default device ❌
 
-### Dopo (PCM)
+### After (PCM)
 ```python
-# elevenlabs_engine.py (MODIFICATO)
+# elevenlabs_engine.py (MODIFIED)
 def get_stream_info(self):
     if self.output_format.startswith('pcm_'):
-        return pyaudio.paInt16, 1, self.sample_rate  # ← Segnala PCM
+        return pyaudio.paInt16, 1, self.sample_rate  # ← Signals PCM
     else:
         return pyaudio.paCustomFormat, -1, -1
 
@@ -266,60 +266,60 @@ audio_stream = self.client.text_to_speech.stream(
     text=text,
     voice_id=self.id,
     model_id=self.model,
-    output_format=self.output_format,  # ← Richiede PCM esplicitamente
+    output_format=self.output_format,  # ← Explicitly requests PCM
 )
 ```
 
-**Risultato**: Audio va su Cable-A (device specificato) ✅
+**Result**: Audio goes to Cable-A (specified device) ✅
 
 ---
 
 ## 🆘 Troubleshooting
 
-### Problema: Modifica non ha effetto
+### Problem: Modification has no effect
 
-**Causa**: Python potrebbe usare file `.pyc` compilati
+**Cause**: Python might be using compiled `.pyc` files
 
-**Soluzione**:
+**Solution**:
 ```bash
-# Elimina cache
+# Delete cache
 Remove-Item -Recurse "C:\Users\[USER]\AppData\Local\Packages\...\RealtimeTTS\__pycache__"
 
-# Riavvia sistema
+# Restart system
 python main_deepl.py
 ```
 
-### Problema: Errore `unexpected keyword argument 'output_format'`
+### Problem: Error `unexpected keyword argument 'output_format'`
 
-**Causa**: Versione vecchia di `elevenlabs` SDK
+**Cause**: Old version of `elevenlabs` SDK
 
-**Soluzione**:
+**Solution**:
 ```bash
 pip install --upgrade elevenlabs
 ```
 
-Versione richiesta: `elevenlabs >= 1.0.0`
+Required version: `elevenlabs >= 1.0.0`
 
-### Problema: Audio distorto con PCM
+### Problem: Distorted audio with PCM
 
-**Causa**: Sample rate mismatch
+**Cause**: Sample rate mismatch
 
-**Soluzione**: Prova un formato diverso:
+**Solution**: Try a different format:
 ```python
 # In tts/elevenlabs_tts.py
 self.engine = ElevenlabsEngine(
     voice=resolved_voice,
     model=model,
-    output_format="pcm_16000"  # ← Prova 16kHz
+    output_format="pcm_16000"  # ← Try 16kHz
 )
 ```
 
 ---
 
-## 📚 Riferimenti
+## 📚 References
 
 - **ElevenLabs API Docs**: https://elevenlabs.io/docs/api-reference/text-to-speech
-- **Formati Audio Supportati**: https://elevenlabs.io/docs/api-reference/streaming
+- **Supported Audio Formats**: https://elevenlabs.io/docs/api-reference/streaming
 - **RealtimeTTS**: https://github.com/KoljaB/RealtimeTTS
 - **PyAudio Device Selection**: https://people.csail.mit.edu/hubert/pyaudio/docs/
 
@@ -327,28 +327,28 @@ self.engine = ElevenlabsEngine(
 
 ## 💡 Best Practices
 
-1. **Backup sempre** prima di modificare pacchetti installati
-2. **Testa incrementalmente**: Applica una modifica alla volta
-3. **Verifica logs** per confermare che PCM mode sia attivo
-4. **Usa `pcm_24000`** come default (best balance)
-5. **Mantieni Azure TTS** configurato come fallback
-6. **Documenta modifiche** per future installazioni
+1. **Always backup** before modifying installed packages
+2. **Test incrementally**: Apply one modification at a time
+3. **Verify logs** to confirm PCM mode is active
+4. **Use `pcm_24000`** as default (best balance)
+5. **Keep Azure TTS** configured as fallback
+6. **Document modifications** for future installations
 
 ---
 
-## 📝 Checklist Completa
+## 📝 Complete Checklist
 
-- [ ] Backup di `elevenlabs_engine.py` creato
-- [ ] Parametro `output_format` aggiunto a `__init__()`
-- [ ] `self.output_format` e `self.sample_rate` salvati
-- [ ] `get_stream_info()` modificato per restituire PCM
-- [ ] `output_format` passato a `client.text_to_speech.stream()`
-- [ ] Cache Python eliminata
-- [ ] Sistema riavviato
-- [ ] Logs verificano `(PCM mode)`
-- [ ] Audio routing testato su Cable-A
-- [ ] Qualità audio verificata
+- [ ] Backup of `elevenlabs_engine.py` created
+- [ ] `output_format` parameter added to `__init__()`
+- [ ] `self.output_format` and `self.sample_rate` stored
+- [ ] `get_stream_info()` modified to return PCM
+- [ ] `output_format` passed to `client.text_to_speech.stream()`
+- [ ] Python cache deleted
+- [ ] System restarted
+- [ ] Logs verify `(PCM mode)`
+- [ ] Audio routing tested on Cable-A
+- [ ] Audio quality verified
 
 ---
 
-**✅ Se tutti i punti sono spuntati, il fix PCM è completato con successo!**
+**✅ If all points are checked, the PCM fix is successfully completed!**

@@ -58,7 +58,7 @@ C:\Users\[USER]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5
    )
    ```
 
-> **📖 Complete guide**: See `ELEVENLABS_PCM_FIX.md` for detailed instructions
+> **📖 Complete guide**: See [ELEVENLABS_PCM_FIX.md](./ELEVENLABS_PCM_FIX.md) for detailed instructions
 
 ### 4️⃣ Test
 

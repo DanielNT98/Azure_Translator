@@ -42,7 +42,7 @@ Created modular architecture that supports **both DeepL and Azure Translation** 
    - Already contained all necessary parameters
    - No changes required (already complete!)
 
-## 🏗️ Architettura Implementata
+## 🏗️ Implemented Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
